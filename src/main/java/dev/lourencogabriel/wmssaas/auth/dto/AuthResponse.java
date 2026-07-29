@@ -1,0 +1,26 @@
+package dev.lourencogabriel.wmssaas.auth.dto;
+
+import org.springframework.security.oauth2.jwt.Jwt;
+
+import java.time.Instant;
+
+public record AuthResponse(
+    String issuer,
+    Instant issuedAt,
+    Instant expiresAt,
+    String subject,
+    String token,
+    String refreshToken
+
+) {
+    public AuthResponse(Jwt jwt, String refreshToken) {
+        this(
+                jwt.getIssuer().toString(),
+                jwt.getIssuedAt(),
+                jwt.getExpiresAt(),
+                jwt.getSubject(),
+                jwt.getTokenValue(),
+                refreshToken
+        );
+    }
+}
