@@ -9,18 +9,13 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>dev.lourencogabriel</groupId>
-    <artifactId>wms-saas-backend</artifactId>
+    <artifactId>inat-ead-backend</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>WMS SAAS BACKEND</name>
-    <description>
-        Backend of the Warehouse Management System (WMS) in a SaaS model.
-        Developed as a final graduation project (TCC) for the Systems Analysis and Development (TADS)
-        degree at the Federal Institute of Paraná (IFPR).
-        Focused on scalability, multi-tenancy, and modern logistics management.
-    </description>
+    <name>INAT EAD Backend</name>
+    <description>API backend da plataforma de educação a distância do INAT Paranaguá, instituição do terceiro setor voltada à formação profissional, inclusão social e desenvolvimento de jovens.</description>
+    <url>https://github.com/GabrielLourenco1912/backend-inat</url>
     <organization>
-        <name>IFPR - Campus Paranaguá</name>
-        <url>https://paranagua.ifpr.edu.br/</url>
+        <name>INAT Paranaguá</name>
     </organization>
     <licenses>
         <license>
@@ -33,22 +28,22 @@
         <developer>
             <id>gabriel-lourenco</id>
             <name>Gabriel Gomes Lourenço</name>
-            <email>seu-email@exemplo.com</email>
             <roles>
-                <role>Lead Developer</role>
-                <role>Architect</role>
+                <role>Desenvolvedor principal</role>
+                <role>Arquiteto de software</role>
             </roles>
             <timezone>-3</timezone>
         </developer>
     </developers>
     <scm>
-        <connection/>
-        <developerConnection/>
-        <tag/>
-        <url/>
+        <connection>scm:git:https://github.com/GabrielLourenco1912/backend-inat.git</connection>
+        <developerConnection>scm:git:git@github.com:GabrielLourenco1912/backend-inat.git</developerConnection>
+        <tag>HEAD</tag>
+        <url>https://github.com/GabrielLourenco1912/backend-inat</url>
     </scm>
     <properties>
         <java.version>21</java.version>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
     <dependencies>
         <dependency>

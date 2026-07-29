@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:h2:mem:wms-saas-test;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    url: jdbc:h2:mem:inat_ead_test;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
     driver-class-name: org.h2.Driver
     username: sa
     password:
@@ -13,3 +13,6 @@ api:
   security:
     jwt:
       secret: test-only-secret-key-with-at-least-32-characters
+      issuer: inat-ead-backend-test
+    refresh-cookie:
+      secure: false
