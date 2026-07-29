@@ -1,7 +1,6 @@
 package dev.lourencogabriel.wmssaas.auth.service;
 
 import dev.lourencogabriel.wmssaas.auth.dto.AuthResponse;
-import dev.lourencogabriel.wmssaas.auth.dto.RefreshRequest;
 import dev.lourencogabriel.wmssaas.auth.dto.RegisterRequest;
 import dev.lourencogabriel.wmssaas.user.exception.EmailAlreadyInUseException;
 import dev.lourencogabriel.wmssaas.user.model.User;
@@ -11,10 +10,10 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.Objects;
+import org.springframework.util.StringUtils;
 
 @Service
 @RequiredArgsConstructor
@@ -25,28 +24,39 @@ public class AuthService {
     private final AuthenticationManager authManager;
     private final TokenService tokenService;
 
+    @Transactional
     public AuthResponse authenticate(String email, String password) {
+        return this.authenticate(email, password, null, null);
+    }
+
+    @Transactional
+    public AuthResponse authenticate(String email, String password, String userAgent, String ipAddress) {
         User currentUser = this.authenticateUser(email, password);
-        return this.tokenService.generateTokens(currentUser.getUlid());
+        return this.tokenService.generateTokens(currentUser.getUlid(), userAgent, ipAddress);
     }
 
     @Transactional
     public AuthResponse register(RegisterRequest registerRequest) {
+        return this.register(registerRequest, null, null);
+    }
+
+    @Transactional
+    public AuthResponse register(RegisterRequest registerRequest, String userAgent, String ipAddress) {
         this.ensureEmailIsAvailable(registerRequest.email());
 
         User newUser = this.buildUser(registerRequest);
         User savedUser = this.userRepository.save(newUser);
 
-        return this.tokenService.generateTokens(savedUser.getUlid());
+        return this.tokenService.generateTokens(savedUser.getUlid(), userAgent, ipAddress);
     }
 
     @Transactional
-    public AuthResponse refresh(RefreshRequest refreshRequest, String accessToken) {
-        Objects.requireNonNull(refreshRequest, "Refresh request is required");
-        Objects.requireNonNull(refreshRequest.refreshToken(), "Refresh token is required");
+    public AuthResponse refresh(String refreshToken, String userAgent, String ipAddress) {
+        if (!StringUtils.hasText(refreshToken)) {
+            throw new JwtException("Refresh token is required");
+        }
 
-        String subject = this.tokenService.extractSubject(accessToken);
-        return this.tokenService.generateTokens(subject);
+        return this.tokenService.refreshTokens(refreshToken, userAgent, ipAddress);
     }
 
     private User authenticateUser(String email, String password) {
