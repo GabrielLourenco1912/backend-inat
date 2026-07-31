@@ -33,7 +33,7 @@ class TokenServiceTest {
 
     private static final String USER_ID = "01JTESTUSER0000000000000000";
     private static final String ORIGINAL_REFRESH_TOKEN = "original-refresh-token";
-    private static final String ISSUER = "inat-ead-backend-test";
+    private static final String ISSUER = "http://inat";
 
     @Mock
     private JwtEncoder jwtEncoder;

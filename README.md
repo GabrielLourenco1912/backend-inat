@@ -32,7 +32,7 @@ O backend contém a base de autenticação e usuários da plataforma, com emiss�
 | `SPRING_DATASOURCE_USERNAME` | Sim | Usuário do banco de dados |
 | `SPRING_DATASOURCE_PASSWORD` | Sim | Senha do banco de dados |
 | `API_SECURITY_JWT_SECRET` | Sim | Chave de assinatura JWT com pelo menos 32 caracteres |
-| `API_SECURITY_JWT_ISSUER` | Não | Emissor dos tokens; padrão: `inat-ead-backend` |
+| `API_SECURITY_JWT_ISSUER` | Sim | URL que identifica o emissor dos tokens |
 | `API_SECURITY_REFRESH_COOKIE_SECURE` | Não | Exige HTTPS no cookie de refresh; padrão: `true` |
 | `SERVER_PORT` | Não | Porta HTTP; padrão: `8080` |
 

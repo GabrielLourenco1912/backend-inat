@@ -26,6 +26,6 @@ api:
   security:
     jwt:
       secret: ${API_SECURITY_JWT_SECRET}
-      issuer: ${API_SECURITY_JWT_ISSUER:inat-ead-backend}
+      issuer: ${API_SECURITY_JWT_ISSUER}
     refresh-cookie:
       secure: ${API_SECURITY_REFRESH_COOKIE_SECURE:true}
