@@ -59,6 +59,11 @@ public class AuthService {
         return this.tokenService.refreshTokens(refreshToken, userAgent, ipAddress);
     }
 
+    @Transactional
+    public void logout(String refreshToken) {
+        this.tokenService.revokeRefreshToken(refreshToken);
+    }
+
     private User authenticateUser(String email, String password) {
         Authentication authentication = this.authManager.authenticate(
                 new UsernamePasswordAuthenticationToken(email, password)

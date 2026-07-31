@@ -124,6 +124,22 @@ class TokenServiceTest {
     }
 
     @Test
+    void shouldRevokeRefreshTokenWithoutReplacementUsingLockedQuery() {
+        RefreshToken currentToken = this.refreshToken(this.user(), Instant.now().plus(1, ChronoUnit.DAYS));
+        when(this.refreshTokenRepository.findByTokenHashForUpdate(this.hash(ORIGINAL_REFRESH_TOKEN)))
+                .thenReturn(Optional.of(currentToken));
+
+        this.tokenService.revokeRefreshToken(ORIGINAL_REFRESH_TOKEN);
+
+        assertAll(
+                () -> assertNotNull(currentToken.getRevokedAt()),
+                () -> assertNull(currentToken.getReplacedByToken())
+        );
+        verify(this.refreshTokenRepository).findByTokenHashForUpdate(this.hash(ORIGINAL_REFRESH_TOKEN));
+        verify(this.refreshTokenRepository).save(currentToken);
+    }
+
+    @Test
     void shouldRejectBlankRefreshTokenBeforeAccessingDatabase() {
         JwtException exception = assertThrows(
                 JwtException.class,

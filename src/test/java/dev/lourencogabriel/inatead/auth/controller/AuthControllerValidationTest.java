@@ -128,7 +128,7 @@ class AuthControllerValidationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"/api/auth/refresh"})
+    @ValueSource(strings = {"/api/auth/refresh", "/api/auth/logout"})
     void shouldRejectMalformedRefreshTokenInRequestBody(String endpoint) throws Exception {
         this.mockMvc.perform(post(endpoint)
                         .contentType(MediaType.APPLICATION_JSON)

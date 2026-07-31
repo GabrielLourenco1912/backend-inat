@@ -100,6 +100,12 @@ public class TokenService {
         return authResponse;
     }
 
+    @Transactional
+    public void revokeRefreshToken(String refreshToken) {
+        RefreshToken currentRefreshToken = this.validateRefreshTokenForUpdate(refreshToken);
+        this.revokeRefreshToken(currentRefreshToken, null);
+    }
+
     @Transactional(readOnly = true)
     public String extractSubject(String token) {
         return this.validateRefreshToken(token).getUser().getUlid();
@@ -155,7 +161,11 @@ public class TokenService {
 
     private void revokeRefreshToken(RefreshToken refreshToken, String replacedByRefreshToken) {
         refreshToken.setRevokedAt(Instant.now());
-        refreshToken.setReplacedByToken(this.hashRefreshToken(replacedByRefreshToken));
+        refreshToken.setReplacedByToken(
+                StringUtils.hasText(replacedByRefreshToken)
+                        ? this.hashRefreshToken(replacedByRefreshToken)
+                        : null
+        );
 
         this.refreshTokenRepository.save(refreshToken);
     }

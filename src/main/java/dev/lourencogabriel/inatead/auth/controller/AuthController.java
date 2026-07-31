@@ -103,4 +103,23 @@ public class AuthController {
                 HttpStatus.OK
         );
     }
+
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse<?>> logout(
+            @Valid @RequestBody(required = false) RefreshRequest refreshRequest,
+            @CookieValue(name = REFRESH_TOKEN_COOKIE, required = false) String refreshTokenCookie,
+            @RequestHeader(value = CLIENT_TYPE_HEADER, required = false) String clientTypeHeader,
+            HttpServletRequest request
+    ) {
+        AuthRequestContext requestContext = this.requestResolver.resolve(clientTypeHeader, request);
+        String refreshToken = this.requestResolver.resolveRefreshToken(
+                requestContext.clientType(),
+                refreshRequest,
+                refreshTokenCookie
+        );
+
+        this.authService.logout(refreshToken);
+
+        return this.responseFactory.buildLogout(requestContext.clientType());
+    }
 }

@@ -153,6 +153,13 @@ class AuthServiceTest {
         assertSame(expectedResponse, response);
     }
 
+    @Test
+    void shouldDelegateRefreshTokenRevocationOnLogout() {
+        this.authService.logout("refresh-token");
+
+        verify(this.tokenService).revokeRefreshToken("refresh-token");
+    }
+
     private User user() {
         User user = new User("Test User", "test@example.com", "encoded-password");
         user.setUlid(USER_ID);
