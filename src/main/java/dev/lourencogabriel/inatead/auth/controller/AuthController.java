@@ -10,6 +10,7 @@ import dev.lourencogabriel.inatead.auth.http.AuthResponseFactory;
 import dev.lourencogabriel.inatead.auth.service.AuthService;
 import dev.lourencogabriel.inatead.web.dto.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -34,7 +35,7 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<?>> login(
-            @RequestBody LoginRequest loginRequest,
+            @Valid @RequestBody LoginRequest loginRequest,
             @RequestHeader(value = CLIENT_TYPE_HEADER, required = false) String clientTypeHeader,
             HttpServletRequest request
     ) {
@@ -56,7 +57,7 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<?>> register(
-            @RequestBody RegisterRequest registerRequest,
+            @Valid @RequestBody RegisterRequest registerRequest,
             @RequestHeader(value = CLIENT_TYPE_HEADER, required = false) String clientTypeHeader,
             HttpServletRequest request
     ) {
@@ -77,7 +78,7 @@ public class AuthController {
 
     @PostMapping("/refresh")
     public ResponseEntity<ApiResponse<?>> refresh(
-            @RequestBody(required = false) RefreshRequest refreshRequest,
+            @Valid @RequestBody(required = false) RefreshRequest refreshRequest,
             @CookieValue(name = REFRESH_TOKEN_COOKIE, required = false) String refreshTokenCookie,
             @RequestHeader(value = CLIENT_TYPE_HEADER, required = false) String clientTypeHeader,
             HttpServletRequest request
