@@ -2,13 +2,10 @@ package dev.lourencogabriel.inatead.auth.config;
 
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import com.nimbusds.jose.proc.SecurityContext;
-import dev.lourencogabriel.inatead.web.dto.ApiResponse;
-import jakarta.servlet.http.HttpServletResponse;
+import dev.lourencogabriel.inatead.auth.http.ApiAuthenticationEntryPoint;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -21,12 +18,10 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
-import org.springframework.security.oauth2.server.resource.InvalidBearerTokenException;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import tools.jackson.databind.ObjectMapper;
 
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
@@ -37,9 +32,14 @@ import java.util.List;
 public class SecurityConfig {
 
     private final SecretKey secretKey;
+    private final ApiAuthenticationEntryPoint authenticationEntryPoint;
 
-    public SecurityConfig(@Value("${api.security.jwt.secret}") String jwtSecret) {
+    public SecurityConfig(
+            @Value("${api.security.jwt.secret}") String jwtSecret,
+            ApiAuthenticationEntryPoint authenticationEntryPoint
+    ) {
         this.secretKey = new SecretKeySpec(jwtSecret.getBytes(), "HmacSHA256");
+        this.authenticationEntryPoint = authenticationEntryPoint;
     }
 
     @Bean
@@ -63,21 +63,11 @@ public class SecurityConfig {
 
             .oauth2ResourceServer(oauth2 -> oauth2
                     .jwt(jwt -> jwt.decoder(jwtDecoder()))
+                    .authenticationEntryPoint(this.authenticationEntryPoint)
             )
 
             .exceptionHandling(exceptions -> exceptions
-                .authenticationEntryPoint((request, response, authException) -> {
-                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-
-                    String message = (authException instanceof InvalidBearerTokenException)
-                            ? "Token expirado ou inválido."
-                            : "Autenticação necessária.";
-                    ApiResponse<Void> body = new ApiResponse<>(null, message, HttpStatus.UNAUTHORIZED);
-
-                    ObjectMapper mapper = new ObjectMapper();
-                    mapper.writeValue(response.getOutputStream(), body);
-                })
+                    .authenticationEntryPoint(this.authenticationEntryPoint)
             );
 
         return http.build();
