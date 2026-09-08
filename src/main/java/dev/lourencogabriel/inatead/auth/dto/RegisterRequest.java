@@ -1,9 +1,9 @@
 package dev.lourencogabriel.inatead.auth.dto;
 
 import dev.lourencogabriel.inatead.shared.validation.MaxUtf8Bytes;
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.*;
+
+import java.time.Instant;
 
 public record RegisterRequest(
         @NotBlank(message = "Name is required")
@@ -14,6 +14,12 @@ public record RegisterRequest(
         @Email(message = "Email must be valid")
         @Size(max = 254, message = "Email must not exceed 254 characters")
         String email,
+
+        @AssertTrue(message = "You must accept the regulations")
+        boolean regulationAccepted,
+
+        @NotNull(message = "Accept regulation at is required")
+        Instant regulationAcceptedAt,
 
         @NotBlank(message = "Password is required")
         @Size(min = 8, message = "Password must contain at least 8 characters")

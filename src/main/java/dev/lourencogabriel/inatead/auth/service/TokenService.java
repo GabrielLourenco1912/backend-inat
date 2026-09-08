@@ -3,6 +3,7 @@ package dev.lourencogabriel.inatead.auth.service;
 import dev.lourencogabriel.inatead.auth.dto.AuthResponse;
 import dev.lourencogabriel.inatead.auth.model.RefreshToken;
 import dev.lourencogabriel.inatead.auth.repository.RefreshTokenRepository;
+import dev.lourencogabriel.inatead.shared.model.UserAccountStatus;
 import dev.lourencogabriel.inatead.user.model.User;
 import dev.lourencogabriel.inatead.user.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
@@ -59,6 +60,9 @@ public class TokenService {
 
         User user = this.userRepository.findById(subject)
                 .orElseThrow(() -> new JwtException("Token subject is invalid"));
+        if (user.getStatus() != UserAccountStatus.ACTIVE || user.getEmailVerifiedAt() == null) {
+            throw new JwtException("User email must be verified before tokens can be issued");
+        }
 
         Instant now = Instant.now();
 

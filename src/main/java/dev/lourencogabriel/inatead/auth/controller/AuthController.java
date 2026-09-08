@@ -1,9 +1,11 @@
 package dev.lourencogabriel.inatead.auth.controller;
 
 import dev.lourencogabriel.inatead.auth.dto.AuthResponse;
+import dev.lourencogabriel.inatead.auth.dto.AuthChallengeResponse;
 import dev.lourencogabriel.inatead.auth.dto.LoginRequest;
 import dev.lourencogabriel.inatead.auth.dto.RefreshRequest;
 import dev.lourencogabriel.inatead.auth.dto.RegisterRequest;
+import dev.lourencogabriel.inatead.auth.dto.VerifyAuthChallengeRequest;
 import dev.lourencogabriel.inatead.auth.http.AuthRequestContext;
 import dev.lourencogabriel.inatead.auth.http.AuthRequestResolver;
 import dev.lourencogabriel.inatead.auth.http.AuthResponseFactory;
@@ -40,19 +42,18 @@ public class AuthController {
             HttpServletRequest request
     ) {
         AuthRequestContext requestContext = this.requestResolver.resolve(clientTypeHeader, request);
-        AuthResponse authResponse = this.authService.authenticate(
+        AuthChallengeResponse challenge = this.authService.authenticate(
                 loginRequest.email(),
                 loginRequest.password(),
                 requestContext.userAgent(),
                 requestContext.ipAddress()
         );
 
-        return this.responseFactory.build(
-                authResponse,
-                requestContext.clientType(),
-                "Authentication Success",
-                HttpStatus.OK
-        );
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(
+                challenge,
+                "Authentication code sent",
+                HttpStatus.ACCEPTED
+        ));
     }
 
     @PostMapping("/register")
@@ -62,8 +63,29 @@ public class AuthController {
             HttpServletRequest request
     ) {
         AuthRequestContext requestContext = this.requestResolver.resolve(clientTypeHeader, request);
-        AuthResponse authResponse = this.authService.register(
+        AuthChallengeResponse challenge = this.authService.register(
                 registerRequest,
+                requestContext.userAgent(),
+                requestContext.ipAddress()
+        );
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(new ApiResponse<>(
+                challenge,
+                "Registration created; verification code sent",
+                HttpStatus.CREATED
+        ));
+    }
+
+    @PostMapping("/challenge/verify")
+    public ResponseEntity<ApiResponse<?>> verifyChallenge(
+            @Valid @RequestBody VerifyAuthChallengeRequest verificationRequest,
+            @RequestHeader(value = CLIENT_TYPE_HEADER, required = false) String clientTypeHeader,
+            HttpServletRequest request
+    ) {
+        AuthRequestContext requestContext = this.requestResolver.resolve(clientTypeHeader, request);
+        AuthResponse authResponse = this.authService.verifyChallenge(
+                verificationRequest.challengeId(),
+                verificationRequest.code(),
                 requestContext.userAgent(),
                 requestContext.ipAddress()
         );
@@ -71,8 +93,8 @@ public class AuthController {
         return this.responseFactory.build(
                 authResponse,
                 requestContext.clientType(),
-                "Register and authentication Success",
-                HttpStatus.CREATED
+                "Authentication successful",
+                HttpStatus.OK
         );
     }
 
