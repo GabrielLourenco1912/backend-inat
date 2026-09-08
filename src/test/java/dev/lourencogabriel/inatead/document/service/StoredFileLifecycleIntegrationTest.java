@@ -1,0 +1,263 @@
+package dev.lourencogabriel.inatead.document.service;
+
+import dev.lourencogabriel.inatead.address.model.Address;
+import dev.lourencogabriel.inatead.activity.dto.AttachmentDtos;
+import dev.lourencogabriel.inatead.activity.model.Activity;
+import dev.lourencogabriel.inatead.activity.model.ActivityFileId;
+import dev.lourencogabriel.inatead.activity.repository.ActivityFileRepository;
+import dev.lourencogabriel.inatead.activity.repository.ActivityRepository;
+import dev.lourencogabriel.inatead.activity.service.ActivityFileService;
+import dev.lourencogabriel.inatead.cohort.model.Cohort;
+import dev.lourencogabriel.inatead.cohort.repository.CohortRepository;
+import dev.lourencogabriel.inatead.document.model.StoredFile;
+import dev.lourencogabriel.inatead.document.repository.StoredFileRepository;
+import dev.lourencogabriel.inatead.lesson.model.Lesson;
+import dev.lourencogabriel.inatead.lesson.repository.LessonRepository;
+import dev.lourencogabriel.inatead.person.model.Person;
+import dev.lourencogabriel.inatead.person.repository.PersonRepository;
+import dev.lourencogabriel.inatead.shared.model.ActivityStatus;
+import dev.lourencogabriel.inatead.shared.model.CohortStatus;
+import dev.lourencogabriel.inatead.shared.model.DeliveryMode;
+import dev.lourencogabriel.inatead.shared.model.LessonStatus;
+import dev.lourencogabriel.inatead.user.model.User;
+import dev.lourencogabriel.inatead.user.repository.UserRepository;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.util.FileSystemUtils;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+@SpringBootTest
+@ActiveProfiles("test")
+class StoredFileLifecycleIntegrationTest {
+
+    private static final Path STORAGE_ROOT = createStorageRoot();
+
+    @Autowired
+    private StoredFileService service;
+    @Autowired
+    private ActivityFileService activityFileService;
+    @Autowired
+    private StoredFileRepository fileRepository;
+    @Autowired
+    private ActivityFileRepository activityFileRepository;
+    @Autowired
+    private ActivityRepository activityRepository;
+    @Autowired
+    private LessonRepository lessonRepository;
+    @Autowired
+    private CohortRepository cohortRepository;
+    @Autowired
+    private PersonRepository personRepository;
+    @Autowired
+    private UserRepository userRepository;
+    @Autowired
+    private TransactionTemplate transactionTemplate;
+
+    @DynamicPropertySource
+    static void storageProperties(DynamicPropertyRegistry registry) {
+        registry.add("api.storage.filesystem.root", STORAGE_ROOT::toString);
+    }
+
+    @AfterAll
+    static void cleanStorageRoot() throws IOException {
+        FileSystemUtils.deleteRecursively(STORAGE_ROOT);
+    }
+
+    @Test
+    void shouldPersistAndDeleteMetadataAndBinaryTogether() throws Exception {
+        String userId = createUser();
+        byte[] content = "document content".getBytes(StandardCharsets.UTF_8);
+        MockMultipartFile upload = new MockMultipartFile(
+                "file",
+                "document.pdf",
+                "application/pdf",
+                content
+        );
+
+        String fileId = transactionTemplate.execute(status -> service.store(upload, userId).getId());
+        StoredFile stored = fileRepository.findById(fileId).orElseThrow();
+        Path storedPath = STORAGE_ROOT.resolve(stored.getStorageKey());
+
+        assertTrue(Files.isRegularFile(storedPath));
+        assertEquals(content.length, stored.getSizeBytes());
+        assertArrayEquals(
+                content,
+                transactionTemplate.execute(status -> service.download(
+                        fileRepository.findById(fileId).orElseThrow()
+                ).resource()).getInputStream().readAllBytes()
+        );
+
+        transactionTemplate.executeWithoutResult(status -> service.delete(
+                fileRepository.findById(fileId).orElseThrow()
+        ));
+
+        assertFalse(fileRepository.existsById(fileId));
+        assertFalse(Files.exists(storedPath));
+    }
+
+    @Test
+    void shouldDeleteBinaryWhenDatabaseTransactionRollsBack() throws Exception {
+        String userId = createUser();
+        long fileCountBefore = fileRepository.count();
+        long binaryCountBefore = binaryCount();
+        MockMultipartFile upload = new MockMultipartFile(
+                "file",
+                "rollback.txt",
+                "text/plain",
+                "rollback".getBytes(StandardCharsets.UTF_8)
+        );
+
+        assertThrows(IntentionalRollback.class, () -> transactionTemplate.executeWithoutResult(status -> {
+            service.store(upload, userId);
+            throw new IntentionalRollback();
+        }));
+
+        assertEquals(fileCountBefore, fileRepository.count());
+        assertEquals(binaryCountBefore, binaryCount());
+    }
+
+    @Test
+    void shouldManageActivityMaterialAndBinaryAsOneResource() throws Exception {
+        String userId = createUser();
+        String activityId = createActivity(userId);
+        byte[] content = "class material".getBytes(StandardCharsets.UTF_8);
+        MockMultipartFile upload = new MockMultipartFile(
+                "file",
+                "material.txt",
+                MediaType.TEXT_PLAIN_VALUE,
+                content
+        );
+
+        AttachmentDtos.ActivityFileResponse attached = transactionTemplate.execute(status ->
+                activityFileService.attach(
+                        activityId,
+                        new AttachmentDtos.ActivityFileRequest(2),
+                        upload,
+                        userId
+                )
+        );
+        String fileId = attached.file().id();
+        StoredFile stored = fileRepository.findById(fileId).orElseThrow();
+        Path storedPath = STORAGE_ROOT.resolve(stored.getStorageKey());
+
+        assertTrue(activityFileRepository.existsById(
+                new ActivityFileId(activityId, fileId)
+        ));
+        assertArrayEquals(
+                content,
+                transactionTemplate.execute(status -> activityFileService.download(
+                        activityId,
+                        fileId
+                ).resource()).getInputStream().readAllBytes()
+        );
+
+        transactionTemplate.executeWithoutResult(status ->
+                activityFileService.detach(activityId, fileId)
+        );
+
+        assertFalse(fileRepository.existsById(fileId));
+        assertFalse(Files.exists(storedPath));
+    }
+
+    private String createUser() {
+        return transactionTemplate.execute(status -> {
+            String suffix = UUID.randomUUID().toString().replace("-", "");
+            Address address = new Address();
+            address.setPostalCode("80000000");
+            address.setStreet("Storage Test Street");
+            address.setStreetNumber("100");
+            address.setDistrict("Center");
+            address.setCity("Curitiba");
+            address.setStateCode("PR");
+            address.setCountryCode("BR");
+
+            Person person = new Person();
+            person.setAddress(address);
+            person.setFullName("Storage Test User");
+            person.setTaxId(suffix.substring(0, 11).replaceAll("[a-f]", "1"));
+            person.setPhoneNumber("41999999999");
+            person.setBirthDate(java.time.LocalDate.of(2000, 1, 1));
+            personRepository.save(person);
+
+            User user = new User("Storage Test User", suffix + "@example.com", "hash");
+            user.setPerson(person);
+            return userRepository.save(user).getUlid();
+        });
+    }
+
+    private String createActivity(String userId) {
+        return transactionTemplate.execute(status -> {
+            String suffix = UUID.randomUUID().toString().replace("-", "");
+            User user = userRepository.findById(userId).orElseThrow();
+
+            Cohort cohort = new Cohort();
+            cohort.setCode("STORAGE-" + suffix.substring(0, 8));
+            cohort.setName("Storage Test Cohort");
+            cohort.setDefaultWeekday(1);
+            cohort.setShiftCode("MORNING");
+            cohort.setStartDate(LocalDate.of(2026, 1, 1));
+            cohort.setEndDate(LocalDate.of(2026, 12, 31));
+            cohort.setStatus(CohortStatus.ACTIVE);
+            cohortRepository.save(cohort);
+
+            Lesson lesson = new Lesson();
+            lesson.setCohort(cohort);
+            lesson.setInstructorPerson(user.getPerson());
+            lesson.setTitle("Storage Test Lesson");
+            lesson.setStartsAt(Instant.parse("2026-09-04T12:00:00Z"));
+            lesson.setEndsAt(Instant.parse("2026-09-04T13:00:00Z"));
+            lesson.setDeliveryMode(DeliveryMode.ONLINE);
+            lesson.setMeetingUrl("https://example.com/lesson");
+            lesson.setStatus(LessonStatus.SCHEDULED);
+            lessonRepository.save(lesson);
+
+            Activity activity = new Activity();
+            activity.setLesson(lesson);
+            activity.setCreatedByUser(user);
+            activity.setTitle("Storage Test Activity");
+            activity.setDescription("Activity used by the filesystem integration test");
+            activity.setAvailableAt(Instant.parse("2026-09-04T12:00:00Z"));
+            activity.setDueAt(Instant.parse("2026-09-05T12:00:00Z"));
+            activity.setStatus(ActivityStatus.PUBLISHED);
+            return activityRepository.save(activity).getId();
+        });
+    }
+
+    private long binaryCount() throws IOException {
+        try (var paths = Files.walk(STORAGE_ROOT)) {
+            return paths.filter(Files::isRegularFile).count();
+        }
+    }
+
+    private static Path createStorageRoot() {
+        try {
+            return Files.createTempDirectory("inat-ead-file-storage-");
+        } catch (IOException ex) {
+            throw new ExceptionInInitializerError(ex);
+        }
+    }
+
+    private static final class IntentionalRollback extends RuntimeException {
+    }
+}

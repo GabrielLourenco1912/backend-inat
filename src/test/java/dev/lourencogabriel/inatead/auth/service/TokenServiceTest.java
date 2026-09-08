@@ -197,6 +197,24 @@ class TokenServiceTest {
         verify(this.refreshTokenRepository, never()).save(any());
     }
 
+    @Test
+    void shouldRejectTokenGenerationBeforeEmailVerification() {
+        User user = this.user();
+        user.setEmailVerifiedAt(null);
+        when(this.userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+
+        JwtException exception = assertThrows(
+                JwtException.class,
+                () -> this.tokenService.generateTokens(USER_ID)
+        );
+
+        assertEquals(
+                "User email must be verified before tokens can be issued",
+                exception.getMessage()
+        );
+        verifyNoInteractions(this.jwtEncoder, this.refreshTokenRepository);
+    }
+
     private void prepareTokenGeneration(User user) {
         when(this.userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
         when(this.jwtEncoder.encode(any())).thenReturn(this.jwt());
@@ -206,6 +224,7 @@ class TokenServiceTest {
     private User user() {
         User user = new User("Test User", "test@example.com", "encoded-password");
         user.setUlid(USER_ID);
+        user.setEmailVerifiedAt(Instant.now());
         return user;
     }
 

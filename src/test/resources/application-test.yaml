@@ -5,11 +5,29 @@ spring:
     username: sa
     password:
   jpa:
+    open-in-view: false
     hibernate:
       ddl-auto: create-drop
     show-sql: false
+  mail:
+    host: localhost
+    port: 2525
+    username: test@inat.local
+    password: test-only
 
 api:
+  mail:
+    from: test@inat.local
+  academic:
+    lifecycle:
+      enabled: false
+  notification:
+    email:
+      enabled: false
+  storage:
+    filesystem:
+      root: ${java.io.tmpdir}/inat-ead-test-files
+      max-size: 1MB
   security:
     jwt:
       secret: test-only-secret-key-with-at-least-32-characters

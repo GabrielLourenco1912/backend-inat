@@ -3,6 +3,10 @@ package dev.lourencogabriel.inatead.auth.service;
 import dev.lourencogabriel.inatead.auth.dto.AuthResponse;
 import dev.lourencogabriel.inatead.auth.model.RefreshToken;
 import dev.lourencogabriel.inatead.auth.repository.RefreshTokenRepository;
+import dev.lourencogabriel.inatead.address.model.Address;
+import dev.lourencogabriel.inatead.person.model.Person;
+import dev.lourencogabriel.inatead.person.repository.PersonRepository;
+import dev.lourencogabriel.inatead.shared.model.UserAccountStatus;
 import dev.lourencogabriel.inatead.user.model.User;
 import dev.lourencogabriel.inatead.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,6 +26,8 @@ import org.testcontainers.mysql.MySQLContainer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Base64;
 import java.util.concurrent.*;
 
@@ -54,19 +60,26 @@ class TokenServiceConcurrencyIntegrationTest {
     private RefreshTokenRepository refreshTokenRepository;
 
     @Autowired
+    private PersonRepository personRepository;
+
+    @Autowired
     private PlatformTransactionManager transactionManager;
 
     @BeforeEach
     void setUp() {
         this.refreshTokenRepository.deleteAll();
         this.userRepository.deleteAll();
+        this.personRepository.deleteAll();
     }
 
     @Test
     void shouldAllowOnlyOneRotationWhenSameRefreshTokenIsUsedConcurrently() throws Exception {
-        User user = this.userRepository.saveAndFlush(
-                new User("Concurrent User", USER_EMAIL, "encoded-password")
-        );
+        Person person = this.personRepository.saveAndFlush(this.person());
+        User newUser = new User("Concurrent User", USER_EMAIL, "encoded-password");
+        newUser.setPerson(person);
+        newUser.setStatus(UserAccountStatus.ACTIVE);
+        newUser.setEmailVerifiedAt(Instant.now());
+        User user = this.userRepository.saveAndFlush(newUser);
         AuthResponse initialTokens = this.tokenService.generateTokens(
                 user.getUlid(),
                 "initial-agent",
@@ -172,5 +185,24 @@ class TokenServiceConcurrencyIntegrationTest {
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException(exception);
         }
+    }
+
+    private Person person() {
+        Address address = new Address();
+        address.setPostalCode("80000000");
+        address.setStreet("Concurrency Street");
+        address.setStreetNumber("1");
+        address.setDistrict("Center");
+        address.setCity("Curitiba");
+        address.setStateCode("PR");
+
+        Person person = new Person();
+        person.setAddress(address);
+        person.setFullName("Concurrent User");
+        person.setTaxId("98765432100");
+        person.setContactEmail(USER_EMAIL);
+        person.setPhoneNumber("41999999999");
+        person.setBirthDate(LocalDate.of(2000, 1, 1));
+        return person;
     }
 }

@@ -1,10 +1,17 @@
 package dev.lourencogabriel.inatead.auth.service;
 
 import dev.lourencogabriel.inatead.auth.dto.AuthResponse;
+import dev.lourencogabriel.inatead.auth.dto.AuthChallengeResponse;
 import dev.lourencogabriel.inatead.auth.dto.RegisterRequest;
+import dev.lourencogabriel.inatead.auth.model.AuthChallengePurpose;
+import dev.lourencogabriel.inatead.person.model.Person;
+import dev.lourencogabriel.inatead.person.repository.PersonRepository;
 import dev.lourencogabriel.inatead.user.exception.EmailAlreadyInUseException;
+import dev.lourencogabriel.inatead.user.exception.PersonAlreadyLinkedToUserException;
+import dev.lourencogabriel.inatead.user.exception.PersonNotFoundForRegistrationException;
 import dev.lourencogabriel.inatead.user.model.User;
 import dev.lourencogabriel.inatead.user.repository.UserRepository;
+import dev.lourencogabriel.inatead.shared.model.UserAccountStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,6 +26,7 @@ import org.springframework.security.oauth2.jwt.JwtException;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -28,9 +36,14 @@ import static org.mockito.Mockito.*;
 class AuthServiceTest {
 
     private static final String USER_ID = "01JTESTUSER0000000000000000";
+    private static final Instant REGULATION_ACCEPTED_AT =
+            Instant.parse("2026-09-07T14:32:10.123Z");
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private PersonRepository personRepository;
 
     @Mock
     private PasswordEncoder passwordEncoder;
@@ -41,30 +54,42 @@ class AuthServiceTest {
     @Mock
     private TokenService tokenService;
 
+    @Mock
+    private AuthChallengeService challengeService;
+
     private AuthService authService;
 
     @BeforeEach
     void setUp() {
         this.authService = new AuthService(
                 this.userRepository,
+                this.personRepository,
                 this.passwordEncoder,
                 this.authenticationManager,
-                this.tokenService
+                this.tokenService,
+                this.challengeService
         );
     }
 
     @Test
-    void shouldAuthenticateAndGenerateTokensForAuthenticatedUser() {
+    void shouldAuthenticateAndIssueMfaChallengeForVerifiedUser() {
         User user = this.user();
         Authentication authentication = mock(Authentication.class);
-        AuthResponse expectedResponse = this.authResponse();
+        AuthChallengeResponse expectedResponse = this.challenge(
+                AuthChallengePurpose.MFA_LOGIN
+        );
         when(authentication.getPrincipal()).thenReturn(user);
         when(this.authenticationManager.authenticate(any())).thenReturn(authentication);
-        when(this.tokenService.generateTokens(USER_ID, "agent", "203.0.113.10"))
+        when(this.challengeService.issue(
+                user,
+                AuthChallengePurpose.MFA_LOGIN,
+                "agent",
+                "203.0.113.10"
+        ))
                 .thenReturn(expectedResponse);
 
-        AuthResponse response = this.authService.authenticate(
-                "test@example.com",
+        AuthChallengeResponse response = this.authService.authenticate(
+                "Test@Example.com",
                 "plain-password",
                 "agent",
                 "203.0.113.10"
@@ -79,23 +104,62 @@ class AuthServiceTest {
                 () -> assertEquals("test@example.com", authenticationCaptor.getValue().getPrincipal()),
                 () -> assertEquals("plain-password", authenticationCaptor.getValue().getCredentials())
         );
+        verifyNoInteractions(this.tokenService);
     }
 
     @Test
-    void shouldRegisterUserWithEncodedPasswordAndGenerateTokens() {
-        RegisterRequest request = new RegisterRequest("Test User", "test@example.com", "plain-password");
-        AuthResponse expectedResponse = this.authResponse();
-        when(this.userRepository.existsByEmail(request.email())).thenReturn(false);
+    void shouldIssueEmailVerificationChallengeForUnverifiedUser() {
+        User user = this.user();
+        user.setEmailVerifiedAt(null);
+        user.setStatus(UserAccountStatus.INVITED);
+        Authentication authentication = mock(Authentication.class);
+        AuthChallengeResponse expectedResponse = this.challenge(
+                AuthChallengePurpose.EMAIL_VERIFICATION
+        );
+        when(authentication.getPrincipal()).thenReturn(user);
+        when(this.authenticationManager.authenticate(any())).thenReturn(authentication);
+        when(this.challengeService.issue(
+                user,
+                AuthChallengePurpose.EMAIL_VERIFICATION,
+                null,
+                null
+        )).thenReturn(expectedResponse);
+
+        AuthChallengeResponse response = this.authService.authenticate(
+                "test@example.com",
+                "plain-password"
+        );
+
+        assertSame(expectedResponse, response);
+        verifyNoInteractions(this.tokenService);
+    }
+
+    @Test
+    void shouldRegisterInvitedUserAndIssueEmailVerificationChallenge() {
+        RegisterRequest request = this.registerRequest("Test@Example.com");
+        Person person = this.person();
+        AuthChallengeResponse expectedResponse = this.challenge(
+                AuthChallengePurpose.EMAIL_VERIFICATION
+        );
+        when(this.userRepository.existsByEmail("test@example.com")).thenReturn(false);
+        when(this.personRepository.findByContactEmailIgnoreCase("test@example.com"))
+                .thenReturn(Optional.of(person));
+        when(this.userRepository.existsByPerson_Id(person.getId())).thenReturn(false);
         when(this.passwordEncoder.encode(request.password())).thenReturn("encoded-password");
         when(this.userRepository.save(any(User.class))).thenAnswer(invocation -> {
             User savedUser = invocation.getArgument(0);
             savedUser.setUlid(USER_ID);
             return savedUser;
         });
-        when(this.tokenService.generateTokens(USER_ID, "agent", "203.0.113.10"))
+        when(this.challengeService.issue(
+                any(User.class),
+                eq(AuthChallengePurpose.EMAIL_VERIFICATION),
+                eq("agent"),
+                eq("203.0.113.10")
+        ))
                 .thenReturn(expectedResponse);
 
-        AuthResponse response = this.authService.register(
+        AuthChallengeResponse response = this.authService.register(
                 request,
                 "agent",
                 "203.0.113.10"
@@ -107,14 +171,23 @@ class AuthServiceTest {
         assertAll(
                 () -> assertSame(expectedResponse, response),
                 () -> assertEquals(request.name(), userCaptor.getValue().getName()),
-                () -> assertEquals(request.email(), userCaptor.getValue().getEmail()),
-                () -> assertEquals("encoded-password", userCaptor.getValue().getPassword())
+                () -> assertEquals("test@example.com", userCaptor.getValue().getEmail()),
+                () -> assertEquals("encoded-password", userCaptor.getValue().getPassword()),
+                () -> assertSame(person, userCaptor.getValue().getPerson()),
+                () -> assertEquals(UserAccountStatus.INVITED, userCaptor.getValue().getStatus()),
+                () -> assertTrue(userCaptor.getValue().isRegulationAccepted()),
+                () -> assertEquals(
+                        REGULATION_ACCEPTED_AT,
+                        userCaptor.getValue().getRegulationAcceptedAt()
+                ),
+                () -> assertNull(userCaptor.getValue().getEmailVerifiedAt())
         );
+        verifyNoInteractions(this.tokenService);
     }
 
     @Test
     void shouldRejectRegistrationWhenEmailIsAlreadyInUse() {
-        RegisterRequest request = new RegisterRequest("Test User", "test@example.com", "plain-password");
+        RegisterRequest request = this.registerRequest("test@example.com");
         when(this.userRepository.existsByEmail(request.email())).thenReturn(true);
 
         EmailAlreadyInUseException exception = assertThrows(
@@ -124,7 +197,60 @@ class AuthServiceTest {
 
         assertTrue(exception.getMessage().contains(request.email()));
         verify(this.userRepository, never()).save(any());
-        verifyNoInteractions(this.passwordEncoder, this.tokenService);
+        verifyNoInteractions(this.passwordEncoder, this.tokenService, this.challengeService);
+    }
+
+    @Test
+    void shouldRejectRegistrationWhenNoPersonHasTheSuppliedEmail() {
+        RegisterRequest request = this.registerRequest("test@example.com");
+        when(this.userRepository.existsByEmail(request.email())).thenReturn(false);
+        when(this.personRepository.findByContactEmailIgnoreCase(request.email()))
+                .thenReturn(Optional.empty());
+
+        assertThrows(
+                PersonNotFoundForRegistrationException.class,
+                () -> this.authService.register(request, null, null)
+        );
+
+        verify(this.userRepository, never()).save(any());
+        verify(this.userRepository, never()).existsByPerson_Id(any());
+        verifyNoInteractions(this.passwordEncoder, this.tokenService, this.challengeService);
+    }
+
+    @Test
+    void shouldRejectRegistrationWhenPersonIsAlreadyLinkedToAnotherUser() {
+        RegisterRequest request = this.registerRequest("test@example.com");
+        Person person = this.person();
+        when(this.userRepository.existsByEmail(request.email())).thenReturn(false);
+        when(this.personRepository.findByContactEmailIgnoreCase(request.email()))
+                .thenReturn(Optional.of(person));
+        when(this.userRepository.existsByPerson_Id(person.getId())).thenReturn(true);
+
+        assertThrows(
+                PersonAlreadyLinkedToUserException.class,
+                () -> this.authService.register(request, null, null)
+        );
+
+        verify(this.userRepository, never()).save(any());
+        verifyNoInteractions(this.passwordEncoder, this.tokenService, this.challengeService);
+    }
+
+    @Test
+    void shouldGenerateTokensOnlyAfterChallengeVerification() {
+        User user = this.user();
+        AuthResponse expectedResponse = this.authResponse();
+        when(this.challengeService.verify("challenge-id", "123456")).thenReturn(user);
+        when(this.tokenService.generateTokens(USER_ID, "agent", "203.0.113.10"))
+                .thenReturn(expectedResponse);
+
+        AuthResponse response = this.authService.verifyChallenge(
+                "challenge-id",
+                "123456",
+                "agent",
+                "203.0.113.10"
+        );
+
+        assertSame(expectedResponse, response);
     }
 
     @Test
@@ -163,7 +289,25 @@ class AuthServiceTest {
     private User user() {
         User user = new User("Test User", "test@example.com", "encoded-password");
         user.setUlid(USER_ID);
+        user.setEmailVerifiedAt(Instant.parse("2026-09-04T12:00:00Z"));
         return user;
+    }
+
+    private Person person() {
+        Person person = new Person();
+        person.setId("01JTESTPERSON000000000000000");
+        person.setContactEmail("test@example.com");
+        return person;
+    }
+
+    private RegisterRequest registerRequest(String email) {
+        return new RegisterRequest(
+                "Test User",
+                email,
+                true,
+                REGULATION_ACCEPTED_AT,
+                "plain-password"
+        );
     }
 
     private AuthResponse authResponse() {
@@ -176,6 +320,16 @@ class AuthServiceTest {
                 "access-token",
                 "refresh-token",
                 now.plus(30, ChronoUnit.DAYS)
+        );
+    }
+
+    private AuthChallengeResponse challenge(AuthChallengePurpose purpose) {
+        return new AuthChallengeResponse(
+                "01JTESTCHALLENGE000000000000",
+                purpose,
+                "t***@example.com",
+                Instant.parse("2026-09-04T12:10:00Z"),
+                5
         );
     }
 }
