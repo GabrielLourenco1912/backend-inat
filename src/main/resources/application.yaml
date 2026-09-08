@@ -1,6 +1,10 @@
 spring:
   application:
     name: inat-ead-backend
+  servlet:
+    multipart:
+      max-file-size: ${FILE_STORAGE_MAX_SIZE:25MB}
+      max-request-size: ${FILE_STORAGE_MAX_REQUEST_SIZE:26MB}
   datasource:
     url: ${SPRING_DATASOURCE_URL}
     username: ${SPRING_DATASOURCE_USERNAME}
@@ -9,6 +13,7 @@ spring:
     virtual:
       enabled: true
   jpa:
+    open-in-view: false
     hibernate:
       ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
     show-sql: ${SPRING_JPA_SHOW_SQL:false}
@@ -18,14 +23,51 @@ spring:
   mvc:
     problemdetails:
       enabled: false
+  mail:
+    host: ${SMTP_HOST:smtp.hostinger.com}
+    port: ${SMTP_PORT:465}
+    username: ${EMAIL:}
+    password: ${EMAIL_PASS:}
+    default-encoding: UTF-8
+    properties:
+      mail:
+        smtp:
+          auth: true
+          connectiontimeout: ${SMTP_CONNECTION_TIMEOUT:5000}
+          timeout: ${SMTP_READ_TIMEOUT:5000}
+          writetimeout: ${SMTP_WRITE_TIMEOUT:5000}
+          ssl:
+            enable: ${SMTP_SSL_ENABLED:true}
+          starttls:
+            enable: ${SMTP_STARTTLS_ENABLED:false}
+            required: ${SMTP_STARTTLS_REQUIRED:false}
 
 server:
   port: ${SERVER_PORT:8080}
 
 api:
+  mail:
+    from: ${EMAIL:}
+  academic:
+    lifecycle:
+      enabled: ${ACADEMIC_LIFECYCLE_ENABLED:true}
+      interval: ${ACADEMIC_LIFECYCLE_INTERVAL:60000}
+      reminder-batch-size: ${ACADEMIC_REMINDER_BATCH_SIZE:200}
+  notification:
+    email:
+      enabled: ${NOTIFICATION_EMAIL_ENABLED:true}
+      dispatch-delay: ${NOTIFICATION_EMAIL_DISPATCH_DELAY:5000}
+      batch-size: ${NOTIFICATION_EMAIL_BATCH_SIZE:50}
+  storage:
+    filesystem:
+      root: ${FILE_STORAGE_ROOT:./data/files}
+      max-size: ${FILE_STORAGE_MAX_SIZE:25MB}
   security:
     jwt:
       secret: ${API_SECURITY_JWT_SECRET}
       issuer: ${API_SECURITY_JWT_ISSUER}
     refresh-cookie:
       secure: ${API_SECURITY_REFRESH_COOKIE_SECURE:true}
+    challenge:
+      ttl: ${AUTH_CHALLENGE_TTL:10m}
+      max-attempts: ${AUTH_CHALLENGE_MAX_ATTEMPTS:5}
