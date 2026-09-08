@@ -88,6 +88,7 @@ public class LessonService extends AbstractCrudService<Lesson, LessonDtos.Reques
         entity.setDeliveryMode(request.deliveryMode());
         entity.setRoom(normalize(request.room()));
         entity.setMeetingUrl(normalize(request.meetingUrl()));
+        entity.setExternalLessonUrl(normalize(request.externalLessonUrl()));
         entity.setStatus(request.status());
     }
 
@@ -236,6 +237,7 @@ public class LessonService extends AbstractCrudService<Lesson, LessonDtos.Reques
                 entity.getDeliveryMode(),
                 entity.getRoom(),
                 entity.getMeetingUrl(),
+                entity.getExternalLessonUrl(),
                 entity.getStatus(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()

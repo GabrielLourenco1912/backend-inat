@@ -65,6 +65,9 @@ public class Lesson extends AuditedEntity {
     @Column(name = "meeting_url", length = 512)
     private String meetingUrl;
 
+    @Column(name = "external_lesson_url", length = 2048)
+    private String externalLessonUrl;
+
     @Enumerated(EnumType.STRING)
     @Column(length = 20, nullable = false)
     private LessonStatus status = LessonStatus.SCHEDULED;
