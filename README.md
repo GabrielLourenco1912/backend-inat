@@ -63,10 +63,12 @@ Duas aulas se sobrepõem quando uma começa antes do término da outra e termina
 - uma turma não pode possuir duas aulas não canceladas sobrepostas;
 - um aprendiz não pode possuir duas participações não canceladas em aulas sobrepostas, mesmo que pertençam a turmas diferentes;
 - a regra do aprendiz é aplicada na inclusão manual, geração da chamada, remanejo e reativação de participantes;
-- ao alterar o horário de uma aula, todos os participantes ativos já vinculados são revalidados;
+- ao alterar a turma ou a data de uma aula, as matrículas de origem de todos os participantes ativos já vinculados são revalidadas;
 - aulas e participações canceladas são desconsideradas.
 
-Cada aula pode informar `externalLessonUrl`, independentemente da modalidade. O campo é opcional, aceita no máximo 2.048 caracteres e, quando preenchido, precisa ser uma URL pública com esquema `http://` ou `https://`. Ele representa o conteúdo externo reproduzível da aula e não substitui `meetingUrl`, que continua sendo o link obrigatório de acesso às aulas `ONLINE`.
+As datas civis da aula, da matrícula e do remanejo são calculadas no fuso do relógio da aplicação (`America/Sao_Paulo`), e não em UTC. Uma aula aberta só pode pertencer a uma turma `ACTIVE`.
+
+Cada aula pode informar `externalLessonUrl`, independentemente da modalidade. O campo é opcional, aceita no máximo 2.048 caracteres e representa o conteúdo externo reproduzível da aula. `meetingUrl` também é opcional, inclusive em aulas `ONLINE`, e aceita no máximo 512 caracteres. Quando preenchidos, ambos os campos precisam conter uma URL com esquema `http://` ou `https://` e host válido.
 
 ### Ciclo acadêmico baseado no horário
 
@@ -78,19 +80,26 @@ Um agendador executa a cada minuto por padrão e reconcilia os estados persistid
 - aulas e atividades `CANCELLED`, atividades `DRAFT` e estados terminais não são alterados;
 - `DRAFT` nunca é publicado automaticamente: a publicação continua sendo uma decisão explícita.
 
+Pela API, uma aula só pode ser criada como `SCHEDULED`. As transições aceitas são `SCHEDULED -> IN_PROGRESS`, `SCHEDULED -> CANCELLED`, `IN_PROGRESS -> COMPLETED` e `IN_PROGRESS -> CANCELLED`; `COMPLETED` e `CANCELLED` são terminais. Uma transição manual para `IN_PROGRESS` exige que o horário atual esteja dentro do período da aula, e `COMPLETED` exige que o período já tenha terminado.
+
+A exclusão física é reservada a aulas `SCHEDULED` sem participantes nem atividades. Participantes de aulas `COMPLETED` ou `CANCELLED` também não podem ser excluídos. Participações `TRANSFERRED` só podem ser criadas pelo remanejo administrativo, preservando o cancelamento da origem e a criação do destino na mesma transação.
+
 Antes de fechar as atividades, o mesmo ciclo processa a janela de lembrete de três horas. O intervalo e o tamanho do lote são configuráveis. O processamento de cada atividade usa bloqueio pessimista e grava `dueReminderProcessedAt`, garantindo no máximo um lembrete por prazo mesmo após reinício ou com mais de uma instância. Se `dueAt` mudar, ou a atividade for publicada novamente, essa marca é limpa para o novo prazo.
 
 ### Cadastro de usuários
 
 `POST /api/auth/register` cria somente a conta de acesso. O e-mail é normalizado para minúsculas e precisa coincidir com o `contactEmail` de uma pessoa já cadastrada; essa pessoa é vinculada obrigatoriamente ao novo usuário em uma relação um-para-um. O e-mail de contato das pessoas é único quando informado.
 
-- Se não existir uma pessoa com o e-mail fornecido, a API responde `422 Unprocessable Entity`;
+- se não existir uma pessoa com o e-mail fornecido, a API responde `422 Unprocessable Entity`;
+- se a pessoa existir, mas estiver `INACTIVE` ou `SUSPENDED`, o cadastro também responde `422 Unprocessable Entity`;
 - se a pessoa já estiver vinculada a outra conta, responde `409 Conflict`;
 - se o e-mail de login já estiver em uso, responde `409 Conflict`.
 
-Nas rotas administrativas de usuários, `personId` também é obrigatório. O cadastro de usuário nunca cria uma pessoa implicitamente.
+Na criação administrativa de usuários, `personId` também é obrigatório e precisa identificar uma pessoa `ACTIVE`. Depois da criação, esse vínculo é imutável: `personId` não faz parte do contrato de atualização e a coluna correspondente não pode ser atualizada pelo ORM. O cadastro de usuário nunca cria uma pessoa implicitamente.
 
 A existência da pessoa elimina a ideia de uma “conta em análise”, mas não permite inferir com segurança se ela é administradora, instrutora, aprendiz ou gestora. Por isso, papel e identidade continuam separados: a conta recebe somente papéis explicitamente concedidos por um administrador. `INVITED` não é um papel nem uma análise cadastral; é apenas o estado transitório até a confirmação do e-mail.
+
+A concessão da role `LEARNER` exige que a pessoa vinculada à conta possua um perfil `Learner` com status `ACTIVE`; perfis ausentes, inativos ou suspensos resultam em `422 Unprocessable Entity`. As demais roles não dependem de um perfil `Learner`.
 
 O cadastro não emite mais JWT imediatamente. Ele cria a conta como `INVITED`, envia um código de seis dígitos e retorna um desafio com `challengeId`, finalidade, e-mail mascarado, expiração e número máximo de tentativas. O código confirma a posse do e-mail e somente `POST /api/auth/challenge/verify` emite os tokens e ativa a conta.
 
@@ -104,6 +113,12 @@ Depois da validação inicial, todo `POST /api/auth/login` bem-sucedido na etapa
 ```
 
 Cada novo desafio invalida o anterior. Por padrão, o código expira em dez minutos, permite cinco tentativas e fica persistido somente como HMAC-SHA-256 com nonce aleatório. Contas não verificadas também não podem criar ou renovar tokens diretamente.
+
+A recuperação de senha reutiliza a mesma infraestrutura de desafio, mas com a finalidade isolada `PASSWORD_RESET`. `POST /api/auth/forgot-password` recebe o e-mail e retorna o desafio enviado; somente contas `ACTIVE` ou `INVITED` podem solicitar a recuperação. `POST /api/auth/reset-password` recebe `challengeId`, código e `newPassword`, altera a credencial e invalida as sessões existentes sem emitir access token, refresh token ou autenticar o usuário. Um código de recuperação não pode ser usado em `/api/auth/challenge/verify`.
+
+Falhas consecutivas de senha ou de código MFA usam o mesmo contador. Ao atingir cinco falhas, a conta passa temporariamente para `LOCKED` por 15 minutos; um agendador a desbloqueia e a tentativa de login também verifica bloqueios vencidos. Um `LOCKED` definido por administrador não expira. O contador só é zerado depois da confirmação correta do desafio.
+
+Alterações administrativas de estado ou credenciais revogam todos os refresh tokens e incrementam a versão de sessão. Cada access token é validado contra o estado `ACTIVE` e essa versão no banco, portanto deixa de funcionar imediatamente após bloqueio, desativação ou invalidação da sessão. Ao selecionar `INVITED`, a verificação anterior do e-mail é removida e o próximo login refaz o fluxo de confirmação. E-mails de notificação ainda pendentes são cancelados quando a conta deixa de estar ativa e o dispatcher confere novamente o estado antes do envio.
 
 ### Criação de notificações
 
@@ -145,13 +160,14 @@ Destinatários do canal `EMAIL` são processados em segundo plano. O dispatcher 
 ### Restrições atuais de entrega de atividades
 
 - Existe no máximo uma entrega por combinação de atividade e aluno;
+- atividades de aulas `SCHEDULED` não aceitam criação, edição ou exclusão de entregas, nem inclusão ou remoção de anexos; quanto ao status da aula, essas operações são liberadas em `IN_PROGRESS` e `COMPLETED`, sujeitas às demais regras da entrega;
 - a atividade precisa estar em `PUBLISHED`; depois do fechamento automático, uma atividade `CLOSED` continua aceitando somente o envio efetivo, convertido em `LATE`, para preservar entregas atrasadas;
-- o aluno precisa constar como participante da aula e não pode estar com participação `CANCELLED`;
+- o aluno precisa constar como participante da aula e não pode estar com participação `CANCELLED`; aprendiz, pessoa e turma precisam continuar ativos e, quando a participação veio de uma matrícula, matrícula e contrato também precisam estar `ACTIVE`;
 - o aluno só pode salvar os estados `DRAFT` ou `SUBMITTED`; um envio posterior ao prazo é convertido automaticamente em `LATE`;
-- somente entregas `DRAFT` ou `RETURNED` podem ser editadas ou excluídas; para alunos, a autorização de anexos segue a mesma regra, embora atualmente `ADMIN` possa anexar ou remover arquivos independentemente do estado;
+- somente entregas `DRAFT` ou `RETURNED` podem ser editadas ou excluídas; entregas e anexos de aluno também ficam bloqueados quando a aula está cancelada;
 - uma entrega `SUBMITTED` ou `LATE` só pode ser avaliada ou devolvida, e uma nota não pode exceder `maxScore`;
 - atualmente não há bloqueio para salvar antes de `availableAt`, não há recusa depois de `dueAt` e texto/anexo não são obrigatórios;
-- anexos devem ser não vazios, têm limite padrão de 25 MB e nome de até 255 caracteres. Não há lista de MIME types permitidos nem limite de quantidade de anexos.
+- anexos devem ser não vazios, têm limite padrão de 25 MB, nome de até 255 caracteres e precisam passar pela política de extensão, MIME declarado e conteúdo real. Ainda não há limite de quantidade de anexos.
 
 ### Frequência automática em aulas online
 
@@ -164,6 +180,8 @@ Depois de uma entrega mudar para `SUBMITTED` ou `LATE`, o backend verifica a con
 - o usuário autenticado que realizou a última entrega fica registrado em `recordedByUser`;
 - o participante é bloqueado durante a verificação para impedir duplicidade em entregas concorrentes;
 - uma frequência preexistente, inclusive lançada manualmente, é preservada e nunca sobrescrita pela automação.
+
+O lançamento ou a correção manual de frequência é bloqueado enquanto a aula estiver `SCHEDULED`; aulas `IN_PROGRESS` e `COMPLETED` aceitam o registro. Essa restrição não se aplica à automação descrita acima.
 
 O domínio de modalidade aceita exclusivamente `ONSITE` ou `ONLINE` nas requisições de aula.
 
@@ -183,19 +201,65 @@ Uploads que também possuem dados estruturados usam `multipart/form-data`: a par
 ```bash
 curl -X POST http://localhost:8080/api/person-documents \
   -H "Authorization: Bearer <token>" \
-  -F 'metadata={"personId":"01...","documentTypeId":1,"documentNumber":"123","issuedOn":"2026-09-04","expiresOn":null,"verificationStatus":"PENDING"};type=application/json' \
+  -F 'metadata={"personId":"01...","documentTypeId":1,"documentNumber":"123","issuedOn":"2026-09-04","expiresOn":null};type=application/json' \
   -F 'file=@documento.pdf;type=application/pdf'
 ```
 
 O upload de uma entrega não possui metadados adicionais e envia apenas a parte `file`. Nas respostas, `file` informa ID, nome original, MIME type, tamanho, SHA-256, autor e data. O download sempre usa `Content-Disposition: attachment` e respeita a autorização do recurso pai.
 
-Durante a gravação, a API gera uma chave aleatória, transmite o conteúdo diretamente ao disco e calcula o SHA-256 na mesma passagem. Um rollback remove o binário recém-criado; ao excluir o recurso ou vínculo, o metadado é removido na transação e o binário somente depois do commit. No Docker Compose, o volume nomeado `file_storage` preserva os dados em `/var/lib/inat/files`.
+Durante a gravação, a API transmite o conteúdo para uma área temporária, calcula SHA-256 e só instala o arquivo depois de todas as inspeções. A chave física é endereçada pelo checksum (`sha256/aa/bb/<checksum>`): arquivos com bytes idênticos compartilham um único binário, mas mantêm seus próprios metadados e vínculos. A reutilização também confere tamanho e checksum do conteúdo já existente. Um rollback remove um binário novo sem referência; na exclusão, o binário compartilhado só é apagado depois do commit e quando o último metadado deixa de referenciá-lo. No Docker Compose, o volume nomeado `file_storage` preserva os dados em `/var/lib/inat/files`.
+
+As políticas padrão são:
+
+- documentos pessoais ou contratuais: `pdf`, `png`, `jpg`, `jpeg` e `webp`;
+- materiais de atividade e anexos de entrega: os formatos anteriores, além de `gif`, `txt`, `csv`, `rtf`, `docx`, `xlsx`, `pptx`, `odt`, `ods`, `odp`, `mp3`, `mp4`, `webm` e `wav`;
+- extensões executáveis, como `.exe`, são recusadas em todos os contextos;
+- a extensão, o MIME declarado e a assinatura/estrutura real precisam ser compatíveis. Arquivos Office e OpenDocument são abertos como contêineres, com bloqueio de macros, entradas executáveis, caminhos inválidos e expansão excessiva;
+- quando o ClamAV é habilitado, o arquivo também é enviado ao `clamd` pelo protocolo `INSTREAM`. Malware é recusado com `422`; se o antivírus estiver indisponível, o upload falha fechado com `503`.
+
+A inspeção estrutural é sempre ativa. O ClamAV é opcional por padrão para não tornar o ambiente local dependente de outro processo, mas deve ser habilitado em produção quando houver um `clamd` acessível.
+
+### Regras de documentos
+
+Cada tipo possui um `scope`: `PERSON`, `CONTRACT` ou `BOTH`. Um tipo não pode ser alterado para um escopo incompatível enquanto já estiver em uso.
+
+Documentos pessoais seguem estas regras:
+
+- somente uma pessoa com status `ACTIVE` pode receber novos documentos ou ter seus metadados alterados;
+- existe no máximo um documento simultâneo por pessoa e tipo;
+- quando informado, o número é único dentro do tipo de documento, sem distinção entre maiúsculas e minúsculas;
+- `issuedOn` não aceita uma data futura; `expiresOn` não aceita uma data já passada nem anterior à emissão;
+- o upload administrativo nasce como `VERIFIED`, com o administrador e o instante da verificação registrados;
+- a pessoa e o tipo são imutáveis depois da criação;
+- quando a validade passa, o agendador muda `VERIFIED` para `EXPIRED`. Uma correção com validade novamente válida registra a renovação e retorna a `VERIFIED`;
+- cada mudança de status gera uma entrada individual com estado anterior, novo estado, motivo, instante e usuário responsável quando houver. O histórico acompanha a resposta do documento.
+
+Documentos contratuais só podem ser criados ou alterados enquanto o contrato estiver em `DRAFT`, `ACTIVE` ou `SUSPENDED`; contratos `ENDED` e `CANCELLED` ficam bloqueados para novas versões ou alterações. O contrato e o tipo do documento são imutáveis depois da criação. A regra já existente de uma única versão atual por contrato e tipo permanece válida.
+
+O ciclo de validade documental executa a cada minuto por padrão, processa lotes configuráveis e usa bloqueio pessimista antes de cada transição. A validade informada representa o último dia válido; por isso, um documento com `expiresOn` igual à data atual só passa a `EXPIRED` no dia seguinte.
+
+Em instalações que já possuam a restrição antiga `uk_files_storage_key`, ela precisa ser removida pela migração do banco antes de usar a deduplicação, pois múltiplos registros de metadados podem apontar para o mesmo binário. Em uma base nova, o Hibernate cria diretamente o índice não exclusivo atual.
+
+### Ciclo de contratos, turmas e matrículas
+
+- contratos são criados exclusivamente como `DRAFT`; nenhum documento é exigido na criação ou na ativação;
+- aprendiz, empresa, escola e data inicial do contrato ficam imutáveis. Uma data final existente só pode ser mantida ou estendida; removê-la representa prazo indeterminado. Reduzi-la para a data atual é permitido exclusivamente ao cancelar e nunca é aceita uma nova data anterior ao dia atual;
+- as transições permitidas são `DRAFT → ACTIVE/CANCELLED`, `ACTIVE → SUSPENDED/ENDED/CANCELLED` e `SUSPENDED → ACTIVE/ENDED/CANCELLED`. Suspensão e cancelamento exigem motivo, e estados terminais não podem ser reabertos;
+- ativar ou manter contrato operacional exige aprendiz, pessoa, empresa e eventual escola ativos. Esses cadastros não podem ser inativados enquanto participarem de um contrato `ACTIVE` ou `SUSPENDED`;
+- o cancelamento do contrato cancela matrículas pendentes/ativas e participantes de aulas abertas originados por elas. O encerramento conclui matrículas ativas e cancela as que ainda estavam pendentes;
+- turmas são criadas como `PLANNED`, podem ter capacidade opcional e só ficam `ACTIVE` durante o próprio período. Matrículas `PENDING` e `ACTIVE` reservam vaga;
+- cancelar uma turma cancela suas matrículas abertas, aulas `SCHEDULED`/`IN_PROGRESS`, atividades `DRAFT`/`PUBLISHED` e os lembretes ainda vigentes, na mesma transação;
+- uma turma só pode ser concluída depois de seu prazo e sem aulas abertas. Turmas e matrículas concluídas ou canceladas são somente leitura; exclusão física fica restrita a rascunhos/planejamentos ainda sem dependências;
+- contratos, turmas e matrículas mantêm histórico individual de cada mudança de estado, incluindo origem automática ou administrativa, motivo, instante e usuário quando houver;
+- o agendador acadêmico também encerra contratos e conclui turmas/matrículas cujo prazo já passou. Rascunhos, planejamentos e matrículas pendentes continuam dependendo de decisão administrativa.
 
 ### Onboarding de aprendizes
 
-`POST /api/learner-onboardings` cria o perfil de pessoa, incluindo seu endereço, e o perfil de aprendiz, além de vincular os responsáveis em uma única transação. Se o CPF já existir, a pessoa é reutilizada sem ter seus dados sobrescritos; a data de nascimento informada deve coincidir com o cadastro existente. Aprendizes menores de 18 anos devem receber ao menos um vínculo marcado como responsável legal.
+`POST /api/learner-onboardings` é a única rota para criar um perfil de aprendiz. Ela cria o perfil de pessoa, incluindo seu endereço, e o perfil de aprendiz, além de vincular os responsáveis em uma única transação. Se o CPF já existir, a pessoa é reutilizada sem ter seus dados sobrescritos; a data de nascimento informada deve coincidir com o cadastro existente. Aprendizes menores de 18 anos devem receber ao menos um vínculo marcado como responsável legal.
 
-As pessoas usadas como responsáveis precisam existir previamente. Os endpoints individuais de pessoas, aprendizes e responsáveis permanecem disponíveis para manutenção administrativa. Endereços são componentes obrigatórios de pessoas e organizações e não possuem endpoint próprio.
+As pessoas usadas como responsáveis precisam existir previamente e ter ao menos 18 anos. As atualizações de pessoa, aprendiz e vínculo de responsável não podem tornar essas regras inválidas, e o último responsável legal de um aprendiz menor não pode ser removido ou desmarcado. Os endpoints individuais de aprendizes permanecem disponíveis somente para consulta, atualização e exclusão administrativa; `POST /api/learners` não existe.
+
+A escola é vinculada pelo contrato. Ela é obrigatória quando o aprendiz tinha menos de 18 anos na data inicial do contrato e ainda não concluiu o ensino médio. Atualizações de pessoa, aprendiz, contrato ou tipo da organização preservam essa regra. Endereços são componentes obrigatórios de pessoas e organizações e não possuem endpoint próprio.
 
 ## Tecnologias
 
@@ -226,13 +290,28 @@ As pessoas usadas como responsáveis precisam existir previamente. Os endpoints 
 | `SMTP_STARTTLS_ENABLED` | Não | Habilita STARTTLS, normalmente com porta `587`; padrão: `false` |
 | `AUTH_CHALLENGE_TTL` | Não | Validade dos códigos de autenticação; padrão: `10m` |
 | `AUTH_CHALLENGE_MAX_ATTEMPTS` | Não | Tentativas permitidas por desafio; padrão: `5` |
+| `AUTH_ACCOUNT_LOCK_MAX_FAILED_ATTEMPTS` | Não | Falhas consecutivas de senha/MFA antes do bloqueio; padrão: `5` |
+| `AUTH_ACCOUNT_LOCK_DURATION` | Não | Duração do bloqueio automático; padrão: `15m` |
+| `AUTH_ACCOUNT_LOCK_SCHEDULER_ENABLED` | Não | Habilita o desbloqueio automático agendado; padrão: `true` |
+| `AUTH_ACCOUNT_UNLOCK_INTERVAL` | Não | Intervalo do desbloqueio automático em milissegundos; padrão: `60000` |
 | `NOTIFICATION_EMAIL_ENABLED` | Não | Habilita o dispatcher de notificações por e-mail; padrão: `true` |
 | `ACADEMIC_LIFECYCLE_ENABLED` | Não | Habilita o agendador de estados acadêmicos e lembretes; padrão: `true` |
 | `ACADEMIC_LIFECYCLE_INTERVAL` | Não | Intervalo em milissegundos entre execuções; padrão: `60000` |
 | `ACADEMIC_REMINDER_BATCH_SIZE` | Não | Máximo de atividades verificadas por ciclo para o lembrete; padrão: `200` (limite: `1000`) |
+| `DOCUMENT_LIFECYCLE_ENABLED` | Não | Habilita a expiração automática de documentos pessoais; padrão: `true` |
+| `DOCUMENT_LIFECYCLE_INTERVAL` | Não | Intervalo do ciclo documental em milissegundos; padrão: `60000` |
+| `DOCUMENT_LIFECYCLE_BATCH_SIZE` | Não | Máximo de documentos expirados por ciclo; padrão: `200` (limite: `1000`) |
 | `FILE_STORAGE_ROOT` | Não | Diretório do filesystem; padrão local: `./data/files` |
 | `FILE_STORAGE_MAX_SIZE` | Não | Tamanho máximo de cada arquivo; padrão: `25MB` |
 | `FILE_STORAGE_MAX_REQUEST_SIZE` | Não | Tamanho máximo da requisição multipart; padrão: `26MB` |
+| `FILE_ALLOWED_DOCUMENT_EXTENSIONS` | Não | Extensões aceitas em documentos pessoais/contratuais; padrão: `pdf,png,jpg,jpeg,webp` |
+| `FILE_ALLOWED_ACTIVITY_EXTENSIONS` | Não | Extensões aceitas em materiais de atividade; usa a lista ampliada descrita acima |
+| `FILE_ALLOWED_SUBMISSION_EXTENSIONS` | Não | Extensões aceitas em anexos de entrega; usa a lista ampliada descrita acima |
+| `FILE_ANTIVIRUS_ENABLED` | Não | Habilita a inspeção pelo ClamAV; padrão: `false` |
+| `CLAMAV_HOST` | Não | Host acessível do processo `clamd`; padrão: `localhost` |
+| `CLAMAV_PORT` | Não | Porta TCP do `clamd`; padrão: `3310` |
+| `CLAMAV_CONNECT_TIMEOUT` | Não | Timeout para conectar ao ClamAV; padrão: `3s` |
+| `CLAMAV_READ_TIMEOUT` | Não | Timeout para receber o resultado do ClamAV; padrão: `30s` |
 | `SERVER_PORT` | Não | Porta HTTP; padrão: `8080` |
 
 O padrão da Hostinger usa `smtp.hostinger.com:465` com SSL. Para a alternativa STARTTLS, configure `SMTP_PORT=587`, `SMTP_SSL_ENABLED=false`, `SMTP_STARTTLS_ENABLED=true` e `SMTP_STARTTLS_REQUIRED=true`.
