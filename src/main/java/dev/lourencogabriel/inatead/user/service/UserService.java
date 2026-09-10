@@ -44,6 +44,7 @@ public class UserService {
         ensureEmailAvailable(email, null);
         Person person = resolvePerson(request.personId());
         ensurePersonIsActive(person);
+        validateAdministrativeActivation(request.status(), false);
 
         User user = new User(request.displayName().trim(), email, passwordEncoder.encode(request.password()));
         user.setPerson(person);
@@ -74,6 +75,10 @@ public class UserService {
         ensureEmailAvailable(email, id);
         boolean emailChanged = !user.getEmail().equalsIgnoreCase(email);
         boolean passwordChanged = request.password() != null && !request.password().isBlank();
+        validateAdministrativeActivation(
+                request.status(),
+                !emailChanged && user.getEmailVerifiedAt() != null
+        );
 
         user.setName(request.displayName().trim());
         user.setEmail(email);
@@ -134,6 +139,17 @@ public class UserService {
     private void ensurePersonIsActive(Person person) {
         if (person.getStatus() != RecordStatus.ACTIVE) {
             throw new BusinessRuleException("A user account requires an active person");
+        }
+    }
+
+    private void validateAdministrativeActivation(
+            UserAccountStatus requestedStatus,
+            boolean emailVerified
+    ) {
+        if (requestedStatus == UserAccountStatus.ACTIVE && !emailVerified) {
+            throw new BusinessRuleException(
+                    "An account without a verified email must remain INVITED until verification is complete"
+            );
         }
     }
 

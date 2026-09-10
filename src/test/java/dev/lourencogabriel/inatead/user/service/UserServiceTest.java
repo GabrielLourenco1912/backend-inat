@@ -18,6 +18,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.Instant;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
@@ -56,13 +57,13 @@ class UserServiceTest {
     private UserService userService;
 
     @Test
-    void shouldCreateDirectUserWithRegulationPending() {
+    void shouldCreateDirectInvitedUserWithRegulationPending() {
         UserDtos.CreateRequest request = new UserDtos.CreateRequest(
                 PERSON_ID,
                 "Direct User",
                 "Direct@Example.com",
                 "plain-password",
-                UserAccountStatus.ACTIVE
+                UserAccountStatus.INVITED
         );
         Person person = new Person();
         person.setId(PERSON_ID);
@@ -89,9 +90,38 @@ class UserServiceTest {
         );
         verify(this.accountSecurityService).applyAdministrativeUpdate(
                 createdUser,
-                UserAccountStatus.ACTIVE,
+                UserAccountStatus.INVITED,
                 false
         );
+    }
+
+    @Test
+    void shouldRejectDirectActiveUserCreationWithoutVerifiedEmail() {
+        UserDtos.CreateRequest request = new UserDtos.CreateRequest(
+                PERSON_ID,
+                "Direct User",
+                "direct@example.com",
+                "plain-password",
+                UserAccountStatus.ACTIVE
+        );
+        Person person = new Person();
+        person.setId(PERSON_ID);
+
+        when(this.userRepository.existsByEmail("direct@example.com")).thenReturn(false);
+        when(this.userRepository.existsByPerson_Id(PERSON_ID)).thenReturn(false);
+        when(this.personRepository.findById(PERSON_ID)).thenReturn(Optional.of(person));
+
+        BusinessRuleException exception = assertThrows(
+                BusinessRuleException.class,
+                () -> this.userService.create(request)
+        );
+
+        assertEquals(
+                "An account without a verified email must remain INVITED until verification is complete",
+                exception.getMessage()
+        );
+        verify(this.passwordEncoder, never()).encode(any());
+        verify(this.userRepository, never()).save(any());
     }
 
     @Test
@@ -101,7 +131,7 @@ class UserServiceTest {
                 "Direct User",
                 "direct@example.com",
                 "plain-password",
-                UserAccountStatus.ACTIVE
+                UserAccountStatus.INVITED
         );
         Person person = new Person();
         person.setId(PERSON_ID);
@@ -128,17 +158,16 @@ class UserServiceTest {
         user.setUlid(USER_ID);
         user.setPerson(linkedPerson);
         user.setStatus(UserAccountStatus.ACTIVE);
+        user.setEmailVerifiedAt(Instant.parse("2026-09-10T12:00:00Z"));
         UserDtos.UpdateRequest request = new UserDtos.UpdateRequest(
                 "Updated Name",
-                "updated@example.com",
+                "current@example.com",
                 null,
                 UserAccountStatus.ACTIVE
         );
 
         when(this.userRepository.findWithRolesByUlidForUpdate(USER_ID))
                 .thenReturn(Optional.of(user));
-        when(this.userRepository.existsByEmailAndUlidNot("updated@example.com", USER_ID))
-                .thenReturn(false);
         when(this.userRepository.save(user)).thenReturn(user);
 
         this.userService.update(USER_ID, request);
@@ -148,7 +177,73 @@ class UserServiceTest {
         verify(this.accountSecurityService).applyAdministrativeUpdate(
                 user,
                 UserAccountStatus.ACTIVE,
-                true
+                false
         );
+    }
+
+    @Test
+    void shouldRejectAdministrativeActivationWithoutVerifiedEmail() {
+        User user = user(UserAccountStatus.INVITED, null);
+        UserDtos.UpdateRequest request = new UserDtos.UpdateRequest(
+                "Invited User",
+                "current@example.com",
+                null,
+                UserAccountStatus.ACTIVE
+        );
+        when(this.userRepository.findWithRolesByUlidForUpdate(USER_ID))
+                .thenReturn(Optional.of(user));
+
+        BusinessRuleException exception = assertThrows(
+                BusinessRuleException.class,
+                () -> this.userService.update(USER_ID, request)
+        );
+
+        assertEquals(
+                "An account without a verified email must remain INVITED until verification is complete",
+                exception.getMessage()
+        );
+        assertEquals(UserAccountStatus.INVITED, user.getStatus());
+        verify(this.userRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldRequireInvitedStatusWhenChangingVerifiedEmail() {
+        Instant verifiedAt = Instant.parse("2026-09-10T12:00:00Z");
+        User user = user(UserAccountStatus.ACTIVE, verifiedAt);
+        UserDtos.UpdateRequest request = new UserDtos.UpdateRequest(
+                "Verified User",
+                "new@example.com",
+                null,
+                UserAccountStatus.ACTIVE
+        );
+        when(this.userRepository.findWithRolesByUlidForUpdate(USER_ID))
+                .thenReturn(Optional.of(user));
+
+        BusinessRuleException exception = assertThrows(
+                BusinessRuleException.class,
+                () -> this.userService.update(USER_ID, request)
+        );
+
+        assertEquals(
+                "An account without a verified email must remain INVITED until verification is complete",
+                exception.getMessage()
+        );
+        assertAll(
+                () -> assertEquals("current@example.com", user.getEmail()),
+                () -> assertEquals(verifiedAt, user.getEmailVerifiedAt()),
+                () -> assertEquals(UserAccountStatus.ACTIVE, user.getStatus())
+        );
+        verify(this.userRepository, never()).save(any());
+    }
+
+    private User user(UserAccountStatus status, Instant emailVerifiedAt) {
+        Person linkedPerson = new Person();
+        linkedPerson.setId(PERSON_ID);
+        User user = new User("Current Name", "current@example.com", "encoded-password");
+        user.setUlid(USER_ID);
+        user.setPerson(linkedPerson);
+        user.setStatus(status);
+        user.setEmailVerifiedAt(emailVerifiedAt);
+        return user;
     }
 }
