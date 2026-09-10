@@ -28,6 +28,32 @@ public interface LessonRepository extends JpaRepository<Lesson, String> {
 
     boolean existsByCohort_IdAndStartsAtAndIdNot(String cohortId, Instant startsAt, String id);
 
+    boolean existsByCohort_Id(String cohortId);
+
+    List<Lesson> findAllByCohort_Id(String cohortId);
+
+    boolean existsByCohort_IdAndStatusIn(
+            String cohortId,
+            Collection<LessonStatus> statuses
+    );
+
+    List<Lesson> findAllByCohort_IdAndStatusIn(
+            String cohortId,
+            Collection<LessonStatus> statuses
+    );
+
+    @Query("""
+            select (count(lesson) > 0)
+            from Lesson lesson
+            where lesson.cohort.id = :cohortId
+              and (lesson.startsAt < :startsAt or lesson.endsAt > :endsAt)
+            """)
+    boolean existsOutsideCohortPeriod(
+            @Param("cohortId") String cohortId,
+            @Param("startsAt") Instant startsAt,
+            @Param("endsAt") Instant endsAt
+    );
+
     @Query("""
             select (count(l) > 0)
             from Lesson l

@@ -17,6 +17,8 @@ import java.util.Optional;
 
 public interface ActivityRepository extends JpaRepository<Activity, String> {
 
+    boolean existsByLesson_Id(String lessonId);
+
     List<Activity> findAllByLesson_IdOrderByAvailableAtAsc(String lessonId);
 
     long countByLesson_IdAndStatusIn(

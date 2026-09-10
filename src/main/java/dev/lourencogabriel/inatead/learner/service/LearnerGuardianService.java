@@ -25,6 +25,7 @@ public class LearnerGuardianService {
     private final LearnerGuardianRepository repository;
     private final LearnerRepository learnerRepository;
     private final PersonRepository personRepository;
+    private final LearnerRelationshipPolicy relationshipPolicy;
 
     @Transactional
     public LearnerGuardianDtos.Response create(
@@ -38,6 +39,7 @@ public class LearnerGuardianService {
             throw new ResourceConflictException("This guardian is already linked to the learner");
         }
 
+        relationshipPolicy.validateGuardianEligibility(guardian);
         validate(learner, guardian, request, null);
         LearnerGuardian link = new LearnerGuardian();
         link.setId(id);
@@ -65,6 +67,8 @@ public class LearnerGuardianService {
             throw new BusinessRuleException("guardianPersonId cannot be changed");
         }
         LearnerGuardian link = require(learnerId, guardianPersonId);
+        relationshipPolicy.validateGuardianEligibility(link.getGuardianPerson());
+        relationshipPolicy.validateGuardianUpdate(link, request.legalGuardian());
         validate(link.getLearner(), link.getGuardianPerson(), request, guardianPersonId);
         apply(link, request);
         return toResponse(repository.save(link));
@@ -72,7 +76,9 @@ public class LearnerGuardianService {
 
     @Transactional
     public void delete(String learnerId, String guardianPersonId) {
-        repository.delete(require(learnerId, guardianPersonId));
+        LearnerGuardian link = require(learnerId, guardianPersonId);
+        relationshipPolicy.validateGuardianDelete(link);
+        repository.delete(link);
     }
 
     private void apply(LearnerGuardian link, LearnerGuardianDtos.Request request) {

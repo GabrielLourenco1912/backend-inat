@@ -5,6 +5,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ContractDocumentRepository extends JpaRepository<ContractDocument, String> {
 
+    boolean existsByDocumentType_Id(Short documentTypeId);
+
+    boolean existsByContract_Id(String contractId);
+
     boolean existsByContract_IdAndDocumentType_IdAndVersionNumber(
             String contractId,
             Short documentTypeId,

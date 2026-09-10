@@ -1,6 +1,7 @@
 package dev.lourencogabriel.inatead.person.service;
 
 import dev.lourencogabriel.inatead.address.service.AddressService;
+import dev.lourencogabriel.inatead.learner.service.LearnerRelationshipPolicy;
 import dev.lourencogabriel.inatead.person.dto.PersonDtos;
 import dev.lourencogabriel.inatead.person.model.Person;
 import dev.lourencogabriel.inatead.person.repository.PersonRepository;
@@ -15,11 +16,17 @@ public class PersonService extends AbstractCrudService<Person, PersonDtos.Reques
 
     private final PersonRepository personRepository;
     private final AddressService addressService;
+    private final LearnerRelationshipPolicy learnerRelationshipPolicy;
 
-    public PersonService(PersonRepository personRepository, AddressService addressService) {
+    public PersonService(
+            PersonRepository personRepository,
+            AddressService addressService,
+            LearnerRelationshipPolicy learnerRelationshipPolicy
+    ) {
         super(personRepository, "Person");
         this.personRepository = personRepository;
         this.addressService = addressService;
+        this.learnerRelationshipPolicy = learnerRelationshipPolicy;
     }
 
     @Override
@@ -36,6 +43,7 @@ public class PersonService extends AbstractCrudService<Person, PersonDtos.Reques
         entity.setPhoneNumber(request.phoneNumber().trim());
         entity.setBirthDate(request.birthDate());
         entity.setGender(normalizeNullable(request.gender()));
+        entity.setStatus(request.status());
     }
 
     @Override
@@ -45,6 +53,10 @@ public class PersonService extends AbstractCrudService<Person, PersonDtos.Reques
                 : personRepository.existsByTaxIdAndIdNot(entity.getTaxId(), entity.getId());
         if (duplicateTaxId) {
             throw new ResourceConflictException("A person with this tax ID already exists");
+        }
+
+        if (!creating) {
+            learnerRelationshipPolicy.validatePersonUpdate(entity);
         }
 
         if (entity.getContactEmail() == null) {
@@ -72,6 +84,7 @@ public class PersonService extends AbstractCrudService<Person, PersonDtos.Reques
                 entity.getPhoneNumber(),
                 entity.getBirthDate(),
                 entity.getGender(),
+                entity.getStatus(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
         );

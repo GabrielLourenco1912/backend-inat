@@ -117,6 +117,9 @@ public class AttendanceRecordService {
         if (participant.getLesson().getStatus() == LessonStatus.CANCELLED) {
             throw new BusinessRuleException("Attendance cannot be recorded for a cancelled lesson");
         }
+        if (participant.getLesson().getStatus() == LessonStatus.SCHEDULED) {
+            throw new BusinessRuleException("Attendance cannot be recorded for a scheduled lesson");
+        }
 
         boolean duplicate = currentId == null
                 ? attendanceRepository.existsByLessonParticipant_Id(participant.getId())

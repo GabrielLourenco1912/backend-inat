@@ -1,6 +1,7 @@
 package dev.lourencogabriel.inatead.person.dto;
 
 import dev.lourencogabriel.inatead.address.dto.AddressDtos;
+import dev.lourencogabriel.inatead.shared.model.RecordStatus;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -24,7 +25,8 @@ public final class PersonDtos {
             @Email @Size(max = 254) String contactEmail,
             @NotBlank @Size(max = 20) String phoneNumber,
             @NotNull @Past LocalDate birthDate,
-            @Size(max = 30) String gender
+            @Size(max = 30) String gender,
+            @NotNull RecordStatus status
     ) {
     }
 
@@ -37,6 +39,7 @@ public final class PersonDtos {
             String phoneNumber,
             LocalDate birthDate,
             String gender,
+            RecordStatus status,
             Instant createdAt,
             Instant updatedAt
     ) {

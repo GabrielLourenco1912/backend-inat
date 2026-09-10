@@ -2,6 +2,7 @@ package dev.lourencogabriel.inatead.contract.controller;
 
 import dev.lourencogabriel.inatead.contract.dto.ContractDtos;
 import dev.lourencogabriel.inatead.contract.service.ContractService;
+import dev.lourencogabriel.inatead.auth.authorization.DomainAuthorization;
 import dev.lourencogabriel.inatead.shared.api.PageResponse;
 import dev.lourencogabriel.inatead.web.dto.ApiResponse;
 import jakarta.validation.Valid;
@@ -12,6 +13,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,14 +34,16 @@ import java.util.List;
 public class ContractController {
 
     private final ContractService service;
+    private final DomainAuthorization domainAuthorization;
 
     @PostMapping
     @PreAuthorize("@domainAuthorization.hasAnyRole(authentication, 'ADMIN')")
     public ResponseEntity<ApiResponse<ContractDtos.Response>> create(
-            @Valid @RequestBody ContractDtos.Request request
+            @Valid @RequestBody ContractDtos.Request request,
+            Authentication authentication
     ) {
         return ResponseEntity.status(HttpStatus.CREATED).body(new ApiResponse<>(
-                service.create(request),
+                service.create(request, domainAuthorization.userId(authentication)),
                 "Contract created",
                 HttpStatus.CREATED
         ));
@@ -64,7 +68,7 @@ public class ContractController {
     }
 
     @GetMapping("/learner/{learnerId}")
-    @PreAuthorize("@domainAuthorization.canAccessLearner(authentication, #learnerId)")
+    @PreAuthorize("@domainAuthorization.canAccessOwnLearnerData(authentication, #learnerId)")
     public ApiResponse<List<ContractDtos.Response>> findByLearner(
             @PathVariable String learnerId
     ) {
@@ -86,9 +90,13 @@ public class ContractController {
     @PreAuthorize("@domainAuthorization.hasAnyRole(authentication, 'ADMIN')")
     public ApiResponse<ContractDtos.Response> update(
             @PathVariable String id,
-            @Valid @RequestBody ContractDtos.Request request
+            @Valid @RequestBody ContractDtos.Request request,
+            Authentication authentication
     ) {
-        return new ApiResponse<>(service.update(id, request), "Contract updated");
+        return new ApiResponse<>(
+                service.update(id, request, domainAuthorization.userId(authentication)),
+                "Contract updated"
+        );
     }
 
     @DeleteMapping("/{id}")

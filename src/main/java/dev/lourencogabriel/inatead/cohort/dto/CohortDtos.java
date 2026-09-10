@@ -1,6 +1,7 @@
 package dev.lourencogabriel.inatead.cohort.dto;
 
 import dev.lourencogabriel.inatead.shared.model.CohortStatus;
+import dev.lourencogabriel.inatead.shared.dto.LifecycleStatusHistoryResponse;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -9,6 +10,7 @@ import jakarta.validation.constraints.Size;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 
 public final class CohortDtos {
 
@@ -22,7 +24,9 @@ public final class CohortDtos {
             @NotBlank @Size(max = 20) String shiftCode,
             @NotNull LocalDate startDate,
             LocalDate endDate,
-            @NotNull CohortStatus status
+            @Min(1) Integer maxLearners,
+            @NotNull CohortStatus status,
+            @Size(max = 500) String statusReason
     ) {
     }
 
@@ -34,7 +38,9 @@ public final class CohortDtos {
             String shiftCode,
             LocalDate startDate,
             LocalDate endDate,
+            Integer maxLearners,
             CohortStatus status,
+            List<LifecycleStatusHistoryResponse> statusHistory,
             Instant createdAt,
             Instant updatedAt
     ) {

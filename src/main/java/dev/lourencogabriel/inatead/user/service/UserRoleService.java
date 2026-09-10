@@ -1,5 +1,8 @@
 package dev.lourencogabriel.inatead.user.service;
 
+import dev.lourencogabriel.inatead.learner.repository.LearnerRepository;
+import dev.lourencogabriel.inatead.shared.model.RecordStatus;
+import dev.lourencogabriel.inatead.shared.model.UserAccountStatus;
 import dev.lourencogabriel.inatead.shared.persistence.EntityLookup;
 import dev.lourencogabriel.inatead.user.dto.UserRoleDtos;
 import dev.lourencogabriel.inatead.user.model.Role;
@@ -10,10 +13,9 @@ import dev.lourencogabriel.inatead.user.model.UserRoleId;
 import dev.lourencogabriel.inatead.user.repository.RoleRepository;
 import dev.lourencogabriel.inatead.user.repository.UserRepository;
 import dev.lourencogabriel.inatead.user.repository.UserRoleRepository;
+import dev.lourencogabriel.inatead.web.exception.BusinessRuleException;
 import dev.lourencogabriel.inatead.web.exception.ResourceConflictException;
 import dev.lourencogabriel.inatead.web.exception.ResourceNotFoundException;
-import dev.lourencogabriel.inatead.web.exception.BusinessRuleException;
-import dev.lourencogabriel.inatead.shared.model.UserAccountStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +29,7 @@ public class UserRoleService {
     private final UserRoleRepository userRoleRepository;
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
+    private final LearnerRepository learnerRepository;
 
     @Transactional
     public UserRoleDtos.Response grant(String userId, Short roleId, String grantedByUserId) {
@@ -40,6 +43,7 @@ public class UserRoleService {
         if (!SystemRoleCode.isSupported(role.getCode())) {
             throw new BusinessRuleException("Only standard system roles can be granted");
         }
+        validateRoleRequirements(user, role);
 
         UserRole assignment = new UserRole();
         assignment.setId(id);
@@ -54,6 +58,20 @@ public class UserRoleService {
         }
 
         return toResponse(userRoleRepository.save(assignment));
+    }
+
+    private void validateRoleRequirements(User user, Role role) {
+        if (!SystemRoleCode.LEARNER.name().equals(role.getCode())) {
+            return;
+        }
+        if (user.getPerson() == null
+                || learnerRepository.findByPerson_Id(user.getPerson().getId())
+                        .filter(learner -> learner.getStatus() == RecordStatus.ACTIVE)
+                        .isEmpty()) {
+            throw new BusinessRuleException(
+                    "The LEARNER role requires an active learner profile linked to the user's person"
+            );
+        }
     }
 
     @Transactional(readOnly = true)

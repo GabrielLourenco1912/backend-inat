@@ -11,8 +11,12 @@ import dev.lourencogabriel.inatead.lesson.repository.LessonParticipantRepository
 import dev.lourencogabriel.inatead.lesson.service.OnlineLessonAttendanceService;
 import dev.lourencogabriel.inatead.shared.api.PageResponse;
 import dev.lourencogabriel.inatead.shared.model.ActivityStatus;
+import dev.lourencogabriel.inatead.shared.model.CohortStatus;
+import dev.lourencogabriel.inatead.shared.model.ContractStatus;
+import dev.lourencogabriel.inatead.shared.model.EnrollmentStatus;
 import dev.lourencogabriel.inatead.shared.model.LessonStatus;
 import dev.lourencogabriel.inatead.shared.model.ParticipationStatus;
+import dev.lourencogabriel.inatead.shared.model.RecordStatus;
 import dev.lourencogabriel.inatead.shared.model.SubmissionStatus;
 import dev.lourencogabriel.inatead.shared.persistence.EntityLookup;
 import dev.lourencogabriel.inatead.user.repository.UserRepository;
@@ -219,10 +223,36 @@ public class ActivitySubmissionService {
         if (participant.getStatus() == ParticipationStatus.CANCELLED) {
             throw new BusinessRuleException("A cancelled lesson participant cannot submit");
         }
+        validateCurrentParticipationContext(participant);
+    }
+
+    private void validateCurrentParticipationContext(LessonParticipant participant) {
+        if (participant.getLearner().getStatus() != RecordStatus.ACTIVE
+                || participant.getLearner().getPerson().getStatus() != RecordStatus.ACTIVE) {
+            throw new BusinessRuleException("Submissions require an active learner and person");
+        }
+        if (participant.getLesson().getCohort().getStatus() != CohortStatus.ACTIVE) {
+            throw new BusinessRuleException("Submissions require an active cohort");
+        }
+        if (participant.getSourceEnrollment() == null) {
+            return;
+        }
+        if (participant.getSourceEnrollment().getStatus() != EnrollmentStatus.ACTIVE) {
+            throw new BusinessRuleException("Submissions require an active cohort enrollment");
+        }
+        if (participant.getSourceEnrollment().getContract().getStatus() != ContractStatus.ACTIVE) {
+            throw new BusinessRuleException("Submissions require an active contract");
+        }
     }
 
     private void ensureLessonAcceptsSubmissionChanges(Activity activity) {
-        if (activity.getLesson().getStatus() == LessonStatus.CANCELLED) {
+        LessonStatus lessonStatus = activity.getLesson().getStatus();
+        if (lessonStatus == LessonStatus.SCHEDULED) {
+            throw new BusinessRuleException(
+                    "Activities from scheduled lessons cannot receive submissions"
+            );
+        }
+        if (lessonStatus == LessonStatus.CANCELLED) {
             throw new BusinessRuleException("Submissions are blocked for a cancelled lesson");
         }
     }

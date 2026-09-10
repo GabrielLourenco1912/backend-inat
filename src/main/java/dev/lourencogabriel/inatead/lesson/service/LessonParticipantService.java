@@ -10,7 +10,6 @@ import dev.lourencogabriel.inatead.lesson.repository.AttendanceRecordRepository;
 import dev.lourencogabriel.inatead.lesson.repository.LessonParticipantRepository;
 import dev.lourencogabriel.inatead.lesson.repository.LessonRepository;
 import dev.lourencogabriel.inatead.shared.api.PageResponse;
-import dev.lourencogabriel.inatead.shared.model.EnrollmentStatus;
 import dev.lourencogabriel.inatead.shared.model.LessonStatus;
 import dev.lourencogabriel.inatead.shared.model.ParticipationStatus;
 import dev.lourencogabriel.inatead.shared.model.ParticipationType;
@@ -25,8 +24,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -40,12 +39,18 @@ public class LessonParticipantService {
     private final LearnerRepository learnerRepository;
     private final CohortEnrollmentRepository enrollmentRepository;
     private final UserRepository userRepository;
+    private final Clock clock;
 
     @Transactional
     public LessonParticipantDtos.Response create(
             LessonParticipantDtos.Request request,
             String actorUserId
     ) {
+        if (request.participationType() == ParticipationType.TRANSFERRED) {
+            throw new BusinessRuleException(
+                    "Transferred participation must be created through the reassignment endpoint"
+            );
+        }
         LessonParticipant participant = build(request, actorUserId);
         validate(participant, null);
         return toResponse(participantRepository.save(participant));
@@ -82,6 +87,9 @@ public class LessonParticipantService {
                 || !participant.getLearner().getId().equals(request.learnerId())) {
             throw new BusinessRuleException("lessonId and learnerId cannot be changed");
         }
+        if (participant.getParticipationType() != request.participationType()) {
+            throw new BusinessRuleException("participationType cannot be changed");
+        }
         apply(participant, request, actorUserId);
         validate(participant, id);
         return toResponse(participantRepository.save(participant));
@@ -90,6 +98,7 @@ public class LessonParticipantService {
     @Transactional
     public void delete(String id) {
         LessonParticipant participant = require(id);
+        ensureLessonAcceptsAssignments(participant.getLesson());
         if (attendanceRepository.existsByLessonParticipant_Id(id)) {
             throw new BusinessRuleException("A participant with attendance cannot be deleted");
         }
@@ -257,40 +266,11 @@ public class LessonParticipantService {
             throw new BusinessRuleException("The learner already has an overlapping lesson");
         }
 
-        CohortEnrollment source = participant.getSourceEnrollment();
-        if (source != null
-                && !source.getContract().getLearner().getId().equals(participant.getLearner().getId())) {
-            throw new BusinessRuleException("The source enrollment belongs to another learner");
-        }
-
-        ParticipationType type = participant.getParticipationType();
-        if ((type == ParticipationType.REGULAR || type == ParticipationType.TRANSFERRED)
-                && source == null) {
-            throw new BusinessRuleException(type + " participation requires a source enrollment");
-        }
-
-        if (source != null) {
-            LocalDate date = lessonDate(participant.getLesson());
-            boolean enrollmentCoversLesson = source.getStatus() == EnrollmentStatus.ACTIVE
-                    && !source.getStartDate().isAfter(date)
-                    && (source.getEndDate() == null || !source.getEndDate().isBefore(date));
-            if (!enrollmentCoversLesson) {
-                throw new BusinessRuleException("The source enrollment is not active on the lesson date");
-            }
-
-            boolean sameCohort = source.getCohort().getId()
-                    .equals(participant.getLesson().getCohort().getId());
-            if (type == ParticipationType.REGULAR && !sameCohort) {
-                throw new BusinessRuleException("A regular participant must belong to the host cohort");
-            }
-            if (type == ParticipationType.TRANSFERRED && sameCohort) {
-                throw new BusinessRuleException("A transferred participant must come from another cohort");
-            }
-        }
-
-        if (type != ParticipationType.REGULAR && participant.getAssignmentReason() == null) {
-            throw new BusinessRuleException("Non-regular participation requires a reason");
-        }
+        LessonParticipantRules.validateContext(
+                participant,
+                participant.getLesson(),
+                lessonDate(participant.getLesson())
+        );
     }
 
     private void ensureLessonAcceptsAssignments(Lesson lesson) {
@@ -301,7 +281,7 @@ public class LessonParticipantService {
     }
 
     private LocalDate lessonDate(Lesson lesson) {
-        return lesson.getStartsAt().atZone(ZoneOffset.UTC).toLocalDate();
+        return lesson.getStartsAt().atZone(clock.getZone()).toLocalDate();
     }
 
     private LessonParticipant require(String id) {

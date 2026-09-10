@@ -44,6 +44,9 @@ public class Cohort extends AuditedEntity {
     @Column(name = "end_date")
     private LocalDate endDate;
 
+    @Column(name = "max_learners")
+    private Integer maxLearners;
+
     @Enumerated(EnumType.STRING)
     @Column(length = 20, nullable = false)
     private CohortStatus status = CohortStatus.PLANNED;

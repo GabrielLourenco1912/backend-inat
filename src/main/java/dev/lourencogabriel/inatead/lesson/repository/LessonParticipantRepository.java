@@ -13,10 +13,13 @@ import org.springframework.data.repository.query.Param;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Collection;
 
 public interface LessonParticipantRepository extends JpaRepository<LessonParticipant, String> {
 
     boolean existsByLesson_IdAndLearner_Id(String lessonId, String learnerId);
+
+    boolean existsByLesson_Id(String lessonId);
 
     @EntityGraph(attributePaths = {"learner", "sourceEnrollment"})
     List<LessonParticipant> findAllByLesson_Id(String lessonId);
@@ -80,6 +83,12 @@ public interface LessonParticipantRepository extends JpaRepository<LessonPartici
     );
 
     boolean existsBySourceEnrollment_Id(String sourceEnrollmentId);
+
+    List<LessonParticipant> findAllBySourceEnrollment_IdAndStatusNotAndLesson_StatusIn(
+            String sourceEnrollmentId,
+            ParticipationStatus excludedStatus,
+            Collection<LessonStatus> lessonStatuses
+    );
 
     boolean existsByLearner_IdAndLesson_InstructorPerson_Id(
             String learnerId,

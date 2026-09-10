@@ -25,7 +25,12 @@ public final class LessonDtos {
             @NotNull Instant endsAt,
             @NotNull DeliveryMode deliveryMode,
             @Size(max = 80) String room,
-            @Size(max = 512) String meetingUrl,
+            @Size(max = 512)
+            @Pattern(
+                    regexp = HTTP_URL_REGEX,
+                    message = "meetingUrl must be a valid HTTP(S) URL"
+            )
+            String meetingUrl,
             @Size(max = 2048)
             @Pattern(
                     regexp = HTTP_URL_REGEX,

@@ -6,6 +6,7 @@ import dev.lourencogabriel.inatead.learner.repository.LearnerRepository;
 import dev.lourencogabriel.inatead.person.repository.PersonRepository;
 import dev.lourencogabriel.inatead.shared.api.AbstractCrudService;
 import dev.lourencogabriel.inatead.shared.persistence.EntityLookup;
+import dev.lourencogabriel.inatead.web.exception.BusinessRuleException;
 import dev.lourencogabriel.inatead.web.exception.ResourceConflictException;
 import org.springframework.stereotype.Service;
 
@@ -14,11 +15,17 @@ public class LearnerService extends AbstractCrudService<Learner, LearnerDtos.Req
 
     private final LearnerRepository learnerRepository;
     private final PersonRepository personRepository;
+    private final LearnerRelationshipPolicy relationshipPolicy;
 
-    public LearnerService(LearnerRepository learnerRepository, PersonRepository personRepository) {
+    public LearnerService(
+            LearnerRepository learnerRepository,
+            PersonRepository personRepository,
+            LearnerRelationshipPolicy relationshipPolicy
+    ) {
         super(learnerRepository, "Learner");
         this.learnerRepository = learnerRepository;
         this.personRepository = personRepository;
+        this.relationshipPolicy = relationshipPolicy;
     }
 
     @Override
@@ -28,6 +35,10 @@ public class LearnerService extends AbstractCrudService<Learner, LearnerDtos.Req
 
     @Override
     protected void apply(Learner entity, LearnerDtos.Request request) {
+        if (entity.getId() != null
+                && !entity.getPerson().getId().equals(request.personId())) {
+            throw new BusinessRuleException("personId cannot be changed");
+        }
         entity.setPerson(EntityLookup.require(personRepository, request.personId(), "Person"));
         entity.setRegistrationNumber(request.registrationNumber().trim());
         entity.setHasCompletedHighSchool(request.hasCompletedHighSchool());
@@ -51,6 +62,10 @@ public class LearnerService extends AbstractCrudService<Learner, LearnerDtos.Req
                 );
         if (duplicateRegistration) {
             throw new ResourceConflictException("This learner registration number is already in use");
+        }
+
+        if (!creating) {
+            relationshipPolicy.validateLearnerUpdate(entity);
         }
     }
 

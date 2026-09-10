@@ -1,10 +1,13 @@
 package dev.lourencogabriel.inatead.person.model;
 
 import dev.lourencogabriel.inatead.address.model.Address;
+import dev.lourencogabriel.inatead.shared.model.RecordStatus;
 import dev.lourencogabriel.inatead.shared.persistence.AuditedEntity;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
@@ -60,4 +63,8 @@ public class Person extends AuditedEntity {
 
     @Column(length = 30)
     private String gender;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20, nullable = false)
+    private RecordStatus status = RecordStatus.ACTIVE;
 }

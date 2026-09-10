@@ -1,6 +1,7 @@
 package dev.lourencogabriel.inatead.organization.service;
 
 import dev.lourencogabriel.inatead.address.service.AddressService;
+import dev.lourencogabriel.inatead.learner.service.LearnerRelationshipPolicy;
 import dev.lourencogabriel.inatead.organization.dto.OrganizationDtos;
 import dev.lourencogabriel.inatead.organization.model.Organization;
 import dev.lourencogabriel.inatead.organization.repository.OrganizationRepository;
@@ -18,14 +19,17 @@ public class OrganizationService
 
     private final OrganizationRepository organizationRepository;
     private final AddressService addressService;
+    private final LearnerRelationshipPolicy learnerRelationshipPolicy;
 
     public OrganizationService(
             OrganizationRepository organizationRepository,
-            AddressService addressService
+            AddressService addressService,
+            LearnerRelationshipPolicy learnerRelationshipPolicy
     ) {
         super(organizationRepository, "Organization");
         this.organizationRepository = organizationRepository;
         this.addressService = addressService;
+        this.learnerRelationshipPolicy = learnerRelationshipPolicy;
     }
 
     @Override
@@ -35,6 +39,16 @@ public class OrganizationService
 
     @Override
     protected void apply(Organization entity, OrganizationDtos.Request request) {
+        if (entity.getId() != null) {
+            learnerRelationshipPolicy.validateOrganizationType(
+                    entity.getId(),
+                    request.organizationType()
+            );
+            learnerRelationshipPolicy.validateOrganizationStatus(
+                    entity.getId(),
+                    request.status()
+            );
+        }
         entity.setParentOrganization(
                 request.parentOrganizationId() == null || request.parentOrganizationId().isBlank()
                         ? null

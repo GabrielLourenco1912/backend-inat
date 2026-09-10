@@ -9,6 +9,7 @@ import dev.lourencogabriel.inatead.lesson.repository.LessonRepository;
 import dev.lourencogabriel.inatead.notification.repository.NotificationRepository;
 import dev.lourencogabriel.inatead.person.repository.PersonRepository;
 import dev.lourencogabriel.inatead.shared.api.AbstractCrudService;
+import dev.lourencogabriel.inatead.shared.model.CohortStatus;
 import dev.lourencogabriel.inatead.shared.model.DeliveryMode;
 import dev.lourencogabriel.inatead.shared.model.ActivityStatus;
 import dev.lourencogabriel.inatead.shared.model.LessonStatus;
@@ -24,7 +25,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Set;
@@ -94,6 +94,10 @@ public class LessonService extends AbstractCrudService<Lesson, LessonDtos.Reques
 
     @Override
     protected void validate(Lesson entity, boolean creating) {
+        if (creating && entity.getStatus() != LessonStatus.SCHEDULED) {
+            throw new BusinessRuleException("A lesson must be created with SCHEDULED status");
+        }
+
         if (!entity.getEndsAt().isAfter(entity.getStartsAt())) {
             throw new BusinessRuleException("Lesson end time must be after its start time");
         }
@@ -108,7 +112,12 @@ public class LessonService extends AbstractCrudService<Lesson, LessonDtos.Reques
             );
         }
 
-        LocalDate lessonDate = entity.getStartsAt().atZone(ZoneOffset.UTC).toLocalDate();
+        if ((creating || isOpen(entity.getStatus()))
+                && entity.getCohort().getStatus() != CohortStatus.ACTIVE) {
+            throw new BusinessRuleException("An open lesson requires an active cohort");
+        }
+
+        LocalDate lessonDate = lessonDate(entity);
         if (lessonDate.isBefore(entity.getCohort().getStartDate())
                 || entity.getCohort().getEndDate() != null
                 && lessonDate.isAfter(entity.getCohort().getEndDate())) {
@@ -169,8 +178,23 @@ public class LessonService extends AbstractCrudService<Lesson, LessonDtos.Reques
     @Transactional
     public LessonDtos.Response update(String id, LessonDtos.Request request) {
         Lesson lesson = requireEntity(id);
+        LessonStatus previousStatus = lesson.getStatus();
+        String previousCohortId = lesson.getCohort().getId();
+        LocalDate previousLessonDate = lessonDate(lesson);
+
         apply(lesson, request);
         validate(lesson, false);
+        validateStatusTransition(previousStatus, lesson);
+
+        boolean cohortChanged = !previousCohortId.equals(lesson.getCohort().getId());
+        boolean lessonDateChanged = !previousLessonDate.equals(lessonDate(lesson));
+        if (cohortChanged && lesson.getCohort().getStatus() != CohortStatus.ACTIVE) {
+            throw new BusinessRuleException("A lesson can only be moved to an active cohort");
+        }
+        if (cohortChanged || lessonDateChanged) {
+            validateExistingRosterContext(lesson);
+        }
+
         Lesson saved = lessonRepository.save(lesson);
 
         if (saved.getStatus() == LessonStatus.CANCELLED) {
@@ -192,15 +216,77 @@ public class LessonService extends AbstractCrudService<Lesson, LessonDtos.Reques
         return toResponse(saved);
     }
 
+    @Override
+    protected void validateDelete(Lesson lesson) {
+        if (lesson.getStatus() != LessonStatus.SCHEDULED) {
+            throw new BusinessRuleException("Only a scheduled lesson can be deleted");
+        }
+        if (participantRepository.existsByLesson_Id(lesson.getId())) {
+            throw new BusinessRuleException("A lesson with participants cannot be deleted");
+        }
+        if (activityRepository.existsByLesson_Id(lesson.getId())) {
+            throw new BusinessRuleException("A lesson with activities cannot be deleted");
+        }
+    }
+
     private void validateDeliveryLocation(Lesson entity) {
         boolean hasRoom = entity.getRoom() != null;
-        boolean hasMeetingUrl = entity.getMeetingUrl() != null;
         if (entity.getDeliveryMode() == DeliveryMode.ONSITE && !hasRoom) {
             throw new BusinessRuleException("Onsite lessons require a room");
         }
-        if (entity.getDeliveryMode() == DeliveryMode.ONLINE && !hasMeetingUrl) {
-            throw new BusinessRuleException("Online lessons require a meeting URL");
+    }
+
+    private void validateStatusTransition(LessonStatus previousStatus, Lesson lesson) {
+        LessonStatus requestedStatus = lesson.getStatus();
+        boolean validTransition = switch (previousStatus) {
+            case SCHEDULED -> requestedStatus == LessonStatus.SCHEDULED
+                    || requestedStatus == LessonStatus.IN_PROGRESS
+                    || requestedStatus == LessonStatus.CANCELLED;
+            case IN_PROGRESS -> requestedStatus == LessonStatus.IN_PROGRESS
+                    || requestedStatus == LessonStatus.COMPLETED
+                    || requestedStatus == LessonStatus.CANCELLED;
+            case COMPLETED -> requestedStatus == LessonStatus.COMPLETED;
+            case CANCELLED -> requestedStatus == LessonStatus.CANCELLED;
+        };
+
+        if (!validTransition) {
+            throw new BusinessRuleException(
+                    "Invalid lesson status transition from "
+                            + previousStatus + " to " + requestedStatus
+            );
         }
+
+        Instant now = clock.instant();
+        if (requestedStatus == LessonStatus.IN_PROGRESS
+                && (lesson.getStartsAt().isAfter(now) || !lesson.getEndsAt().isAfter(now))) {
+            throw new BusinessRuleException(
+                    "IN_PROGRESS status requires the current time to be inside the lesson period"
+            );
+        }
+        if (requestedStatus == LessonStatus.COMPLETED && lesson.getEndsAt().isAfter(now)) {
+            throw new BusinessRuleException(
+                    "COMPLETED status requires the lesson period to have ended"
+            );
+        }
+    }
+
+    private void validateExistingRosterContext(Lesson lesson) {
+        LocalDate date = lessonDate(lesson);
+        participantRepository.findAllByLesson_Id(lesson.getId()).stream()
+                .filter(participant -> participant.getStatus() != ParticipationStatus.CANCELLED)
+                .forEach(participant -> LessonParticipantRules.validateContext(
+                        participant,
+                        lesson,
+                        date
+                ));
+    }
+
+    private boolean isOpen(LessonStatus status) {
+        return status == LessonStatus.SCHEDULED || status == LessonStatus.IN_PROGRESS;
+    }
+
+    private LocalDate lessonDate(Lesson lesson) {
+        return lesson.getStartsAt().atZone(clock.getZone()).toLocalDate();
     }
 
     @org.springframework.transaction.annotation.Transactional(readOnly = true)

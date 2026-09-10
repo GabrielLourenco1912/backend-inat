@@ -14,6 +14,15 @@ public interface LearnerGuardianRepository extends JpaRepository<LearnerGuardian
 
     boolean existsByLearner_IdAndPrimaryContactTrue(String learnerId);
 
+    boolean existsByLearner_IdAndLegalGuardianTrue(String learnerId);
+
+    boolean existsByLearner_IdAndLegalGuardianTrueAndGuardianPerson_IdNot(
+            String learnerId,
+            String guardianPersonId
+    );
+
+    boolean existsByGuardianPerson_Id(String guardianPersonId);
+
     boolean existsByLearner_IdAndPrimaryContactTrueAndGuardianPerson_IdNot(
             String learnerId,
             String guardianPersonId
