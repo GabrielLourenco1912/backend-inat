@@ -1,12 +1,16 @@
 package dev.lourencogabriel.inatead.auth.controller;
 
 import dev.lourencogabriel.inatead.auth.dto.AuthResponse;
+import dev.lourencogabriel.inatead.auth.dto.AuthChallengeResponse;
+import dev.lourencogabriel.inatead.auth.dto.ForgotPasswordRequest;
 import dev.lourencogabriel.inatead.auth.dto.RefreshRequest;
+import dev.lourencogabriel.inatead.auth.dto.ResetPasswordRequest;
 import dev.lourencogabriel.inatead.auth.dto.VerifyAuthChallengeRequest;
 import dev.lourencogabriel.inatead.auth.http.AuthClientType;
 import dev.lourencogabriel.inatead.auth.http.AuthRequestContext;
 import dev.lourencogabriel.inatead.auth.http.AuthRequestResolver;
 import dev.lourencogabriel.inatead.auth.http.AuthResponseFactory;
+import dev.lourencogabriel.inatead.auth.model.AuthChallengePurpose;
 import dev.lourencogabriel.inatead.auth.service.AuthService;
 import dev.lourencogabriel.inatead.web.dto.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,6 +25,9 @@ import org.springframework.http.ResponseEntity;
 import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -126,5 +133,61 @@ class AuthControllerTest {
         );
 
         assertSame(expectedResponse, response);
+    }
+
+    @Test
+    void shouldRequestPasswordResetCodeUsingRequestContext() {
+        ForgotPasswordRequest forgotPasswordRequest = new ForgotPasswordRequest(
+                "test@example.com"
+        );
+        AuthRequestContext requestContext = new AuthRequestContext(
+                AuthClientType.WEB,
+                "agent",
+                "203.0.113.10"
+        );
+        AuthChallengeResponse challenge = new AuthChallengeResponse(
+                "01JTESTCHALLENGE000000000000",
+                AuthChallengePurpose.PASSWORD_RESET,
+                "t***@example.com",
+                Instant.parse("2026-09-04T12:10:00Z"),
+                5
+        );
+        when(this.requestResolver.resolve("web", this.httpServletRequest))
+                .thenReturn(requestContext);
+        when(this.authService.requestPasswordReset(
+                forgotPasswordRequest.email(),
+                requestContext.userAgent(),
+                requestContext.ipAddress()
+        )).thenReturn(challenge);
+
+        ResponseEntity<ApiResponse<?>> response = this.authController.forgotPassword(
+                forgotPasswordRequest,
+                "web",
+                this.httpServletRequest
+        );
+
+        assertEquals(HttpStatus.ACCEPTED, response.getStatusCode());
+        assertSame(challenge, response.getBody().data());
+    }
+
+    @Test
+    void shouldResetPasswordWithoutBuildingAuthenticatedSession() {
+        ResetPasswordRequest request = new ResetPasswordRequest(
+                "01JTESTCHALLENGE000000000000",
+                "123456",
+                "new-password"
+        );
+
+        ResponseEntity<ApiResponse<?>> response = this.authController.resetPassword(request);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("Password reset successfully", response.getBody().message());
+        assertNull(response.getBody().data());
+        verify(this.authService).resetPassword(
+                request.challengeId(),
+                request.code(),
+                request.newPassword()
+        );
+        verifyNoInteractions(this.responseFactory);
     }
 }

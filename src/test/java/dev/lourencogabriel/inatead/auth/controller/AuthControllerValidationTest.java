@@ -240,6 +240,43 @@ class AuthControllerValidationTest {
         this.verifyRequestWasNotProcessed();
     }
 
+    @Test
+    void shouldRejectInvalidForgotPasswordEmail() throws Exception {
+        this.mockMvc.perform(post("/api/auth/forgot-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "invalid-email"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Validation Error"))
+                .andExpect(jsonPath("$.data[0].field").value("email"));
+
+        this.verifyRequestWasNotProcessed();
+    }
+
+    @Test
+    void shouldRejectInvalidResetPasswordRequest() throws Exception {
+        this.mockMvc.perform(post("/api/auth/reset-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "challengeId": " ",
+                                  "code": "12ab56",
+                                  "newPassword": "short"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Validation Error"))
+                .andExpect(jsonPath(
+                        "$.data[*].field",
+                        containsInAnyOrder("challengeId", "code", "newPassword")
+                ));
+
+        this.verifyRequestWasNotProcessed();
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"/api/auth/refresh", "/api/auth/logout"})
     void shouldRejectMalformedRefreshTokenInRequestBody(String endpoint) throws Exception {

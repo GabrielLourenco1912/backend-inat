@@ -25,8 +25,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -66,11 +68,19 @@ class LessonParticipantServiceTest {
                 lessonRepository,
                 learnerRepository,
                 enrollmentRepository,
-                userRepository
+                userRepository,
+                Clock.fixed(
+                        Instant.parse("2026-08-20T12:00:00Z"),
+                        ZoneId.of("America/Sao_Paulo")
+                )
         );
 
         learner = new Learner();
         learner.setId("learner");
+        learner.setStatus(dev.lourencogabriel.inatead.shared.model.RecordStatus.ACTIVE);
+        var learnerPerson = new dev.lourencogabriel.inatead.person.model.Person();
+        learnerPerson.setStatus(dev.lourencogabriel.inatead.shared.model.RecordStatus.ACTIVE);
+        learner.setPerson(learnerPerson);
         Cohort sourceCohort = cohort("cohort-a");
         Cohort targetCohort = cohort("cohort-b");
         Lesson sourceLesson = lesson("lesson-a", sourceCohort);
@@ -78,6 +88,7 @@ class LessonParticipantServiceTest {
 
         Contract contract = new Contract();
         contract.setLearner(learner);
+        contract.setStatus(dev.lourencogabriel.inatead.shared.model.ContractStatus.ACTIVE);
         CohortEnrollment enrollment = new CohortEnrollment();
         enrollment.setId("enrollment");
         enrollment.setContract(contract);
@@ -181,9 +192,145 @@ class LessonParticipantServiceTest {
         verify(participantRepository, never()).save(any());
     }
 
+    @Test
+    void shouldRequireTheAdministrativeReassignmentFlowForTransferredParticipants() {
+        BusinessRuleException exception = assertThrows(
+                BusinessRuleException.class,
+                () -> service.create(
+                        new LessonParticipantDtos.Request(
+                                "lesson-b",
+                                "learner",
+                                "enrollment",
+                                ParticipationType.TRANSFERRED,
+                                ParticipationStatus.EXPECTED,
+                                "Direct transfer"
+                        ),
+                        null
+                )
+        );
+
+        assertEquals(
+                "Transferred participation must be created through the reassignment endpoint",
+                exception.getMessage()
+        );
+        verify(lessonRepository, never()).findById(any());
+        verify(participantRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldNotAllowChangingAnExistingParticipationType() {
+        when(participantRepository.findById("participant-a")).thenReturn(Optional.of(source));
+
+        BusinessRuleException exception = assertThrows(
+                BusinessRuleException.class,
+                () -> service.update(
+                        "participant-a",
+                        new LessonParticipantDtos.Request(
+                                "lesson-a",
+                                "learner",
+                                "enrollment",
+                                ParticipationType.TRANSFERRED,
+                                ParticipationStatus.EXPECTED,
+                                "Type change"
+                        ),
+                        "actor"
+                )
+        );
+
+        assertEquals("participationType cannot be changed", exception.getMessage());
+        verify(lessonRepository, never()).findById(any());
+        verify(participantRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldRejectDeletingAParticipantFromAClosedLesson() {
+        source.getLesson().setStatus(LessonStatus.COMPLETED);
+        when(participantRepository.findById("participant-a")).thenReturn(Optional.of(source));
+
+        BusinessRuleException exception = assertThrows(
+                BusinessRuleException.class,
+                () -> service.delete("participant-a")
+        );
+
+        assertEquals("Participants cannot be changed in a closed lesson", exception.getMessage());
+        verify(attendanceRepository, never()).existsByLessonParticipant_Id(any());
+        verify(participantRepository, never()).delete(any());
+    }
+
+    @Test
+    void shouldUseTheApplicationTimeZoneForEnrollmentCoverage() {
+        targetLesson.setStartsAt(Instant.parse("2026-08-21T01:00:00Z"));
+        targetLesson.setEndsAt(Instant.parse("2026-08-21T02:00:00Z"));
+
+        Contract contract = new Contract();
+        contract.setLearner(learner);
+        contract.setStatus(dev.lourencogabriel.inatead.shared.model.ContractStatus.ACTIVE);
+        CohortEnrollment targetEnrollment = new CohortEnrollment();
+        targetEnrollment.setId("target-enrollment");
+        targetEnrollment.setContract(contract);
+        targetEnrollment.setCohort(targetLesson.getCohort());
+        targetEnrollment.setStartDate(LocalDate.of(2026, 1, 1));
+        targetEnrollment.setEndDate(LocalDate.of(2026, 8, 20));
+        targetEnrollment.setStatus(EnrollmentStatus.ACTIVE);
+
+        when(lessonRepository.findById("lesson-b")).thenReturn(Optional.of(targetLesson));
+        when(learnerRepository.findById("learner")).thenReturn(Optional.of(learner));
+        when(enrollmentRepository.findById("target-enrollment"))
+                .thenReturn(Optional.of(targetEnrollment));
+        when(participantRepository.existsByLesson_IdAndLearner_Id("lesson-b", "learner"))
+                .thenReturn(false);
+        when(participantRepository.save(any(LessonParticipant.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        LessonParticipantDtos.Response response = service.create(
+                new LessonParticipantDtos.Request(
+                        "lesson-b",
+                        "learner",
+                        "target-enrollment",
+                        ParticipationType.REGULAR,
+                        ParticipationStatus.EXPECTED,
+                        null
+                ),
+                null
+        );
+
+        assertEquals("target-enrollment", response.sourceEnrollmentId());
+    }
+
+    @Test
+    void shouldUseTheApplicationTimeZoneWhenComparingReassignmentDates() {
+        source.getLesson().setStartsAt(Instant.parse("2026-08-20T23:00:00Z"));
+        source.getLesson().setEndsAt(Instant.parse("2026-08-21T00:00:00Z"));
+        targetLesson.setStartsAt(Instant.parse("2026-08-21T01:00:00Z"));
+        targetLesson.setEndsAt(Instant.parse("2026-08-21T02:00:00Z"));
+
+        User actor = new User("Staff", "staff@example.com", "hash");
+        actor.setUlid("actor");
+        when(participantRepository.findById("participant-a")).thenReturn(Optional.of(source));
+        when(attendanceRepository.existsByLessonParticipant_Id("participant-a")).thenReturn(false);
+        when(lessonRepository.findById("lesson-b")).thenReturn(Optional.of(targetLesson));
+        when(participantRepository.existsByLesson_IdAndLearner_Id("lesson-b", "learner"))
+                .thenReturn(false);
+        when(userRepository.findById("actor")).thenReturn(Optional.of(actor));
+        when(participantRepository.save(any(LessonParticipant.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        LessonParticipantDtos.ReassignmentResponse response = service.reassign(
+                new LessonParticipantDtos.ReassignRequest(
+                        "participant-a",
+                        "lesson-b",
+                        "Same date in Sao Paulo"
+                ),
+                "actor"
+        );
+
+        assertEquals("lesson-b", response.target().lessonId());
+    }
+
     private Cohort cohort(String id) {
         Cohort cohort = new Cohort();
         cohort.setId(id);
+        cohort.setStatus(dev.lourencogabriel.inatead.shared.model.CohortStatus.ACTIVE);
         return cohort;
     }
 

@@ -1,10 +1,14 @@
 package dev.lourencogabriel.inatead.lesson.service;
 
 import dev.lourencogabriel.inatead.activity.repository.ActivityRepository;
+import dev.lourencogabriel.inatead.cohort.model.CohortEnrollment;
 import dev.lourencogabriel.inatead.cohort.model.Cohort;
 import dev.lourencogabriel.inatead.cohort.repository.CohortRepository;
+import dev.lourencogabriel.inatead.contract.model.Contract;
+import dev.lourencogabriel.inatead.learner.model.Learner;
 import dev.lourencogabriel.inatead.lesson.dto.LessonDtos;
 import dev.lourencogabriel.inatead.lesson.model.Lesson;
+import dev.lourencogabriel.inatead.lesson.model.LessonParticipant;
 import dev.lourencogabriel.inatead.lesson.repository.LessonParticipantRepository;
 import dev.lourencogabriel.inatead.lesson.repository.LessonRepository;
 import dev.lourencogabriel.inatead.notification.repository.NotificationRepository;
@@ -12,8 +16,11 @@ import dev.lourencogabriel.inatead.person.model.Person;
 import dev.lourencogabriel.inatead.person.repository.PersonRepository;
 import dev.lourencogabriel.inatead.shared.model.DeliveryMode;
 import dev.lourencogabriel.inatead.shared.model.ActivityStatus;
+import dev.lourencogabriel.inatead.shared.model.CohortStatus;
+import dev.lourencogabriel.inatead.shared.model.EnrollmentStatus;
 import dev.lourencogabriel.inatead.shared.model.LessonStatus;
 import dev.lourencogabriel.inatead.shared.model.ParticipationStatus;
+import dev.lourencogabriel.inatead.shared.model.ParticipationType;
 import dev.lourencogabriel.inatead.shared.model.UserAccountStatus;
 import dev.lourencogabriel.inatead.user.repository.UserRepository;
 import dev.lourencogabriel.inatead.web.exception.BusinessRuleException;
@@ -26,11 +33,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -72,13 +81,14 @@ class LessonServiceScheduleConflictTest {
                 participantRepository,
                 activityRepository,
                 notificationRepository,
-                Clock.fixed(STARTS_AT, ZoneOffset.UTC)
+                Clock.fixed(STARTS_AT, ZoneId.of("America/Sao_Paulo"))
         );
 
         cohort = new Cohort();
         cohort.setId("cohort");
         cohort.setStartDate(LocalDate.of(2026, 1, 1));
         cohort.setEndDate(LocalDate.of(2026, 12, 31));
+        cohort.setStatus(CohortStatus.ACTIVE);
 
         instructor = new Person();
         instructor.setId("instructor");
@@ -169,6 +179,331 @@ class LessonServiceScheduleConflictTest {
         );
     }
 
+    @Test
+    void shouldAllowAnOnlineLessonWithoutMeetingUrl() {
+        stubReferences();
+        when(lessonRepository.save(any(Lesson.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        LessonDtos.Response response = service.create(new LessonDtos.Request(
+                "cohort",
+                "instructor",
+                "Online lesson without meeting",
+                STARTS_AT,
+                ENDS_AT,
+                DeliveryMode.ONLINE,
+                null,
+                null,
+                null,
+                LessonStatus.SCHEDULED
+        ));
+
+        assertEquals(DeliveryMode.ONLINE, response.deliveryMode());
+        assertNull(response.meetingUrl());
+    }
+
+    @Test
+    void shouldRequireScheduledStatusOnCreation() {
+        when(cohortRepository.findById("cohort")).thenReturn(Optional.of(cohort));
+        when(personRepository.findById("instructor")).thenReturn(Optional.of(instructor));
+
+        BusinessRuleException exception = assertThrows(
+                BusinessRuleException.class,
+                () -> service.create(request(LessonStatus.COMPLETED))
+        );
+
+        assertEquals("A lesson must be created with SCHEDULED status", exception.getMessage());
+        verify(lessonRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldRejectAnOpenLessonForANonActiveCohort() {
+        cohort.setStatus(CohortStatus.PLANNED);
+        stubReferences();
+
+        BusinessRuleException exception = assertThrows(
+                BusinessRuleException.class,
+                () -> service.create(request())
+        );
+
+        assertEquals("An open lesson requires an active cohort", exception.getMessage());
+        verify(lessonRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldRejectAStatusRegressionFromCompletedToScheduled() {
+        Lesson lesson = lesson();
+        lesson.setId("lesson");
+        lesson.setStatus(LessonStatus.COMPLETED);
+        when(lessonRepository.findById("lesson")).thenReturn(Optional.of(lesson));
+        stubReferences();
+
+        BusinessRuleException exception = assertThrows(
+                BusinessRuleException.class,
+                () -> service.update("lesson", request())
+        );
+
+        assertEquals(
+                "Invalid lesson status transition from COMPLETED to SCHEDULED",
+                exception.getMessage()
+        );
+        verify(lessonRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldRejectReopeningACancelledLesson() {
+        Lesson lesson = lesson();
+        lesson.setId("lesson");
+        lesson.setStatus(LessonStatus.CANCELLED);
+        when(lessonRepository.findById("lesson")).thenReturn(Optional.of(lesson));
+        stubReferences();
+
+        BusinessRuleException exception = assertThrows(
+                BusinessRuleException.class,
+                () -> service.update("lesson", request())
+        );
+
+        assertEquals(
+                "Invalid lesson status transition from CANCELLED to SCHEDULED",
+                exception.getMessage()
+        );
+        verify(lessonRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldAllowCompletingAnElapsedInProgressLesson() {
+        Instant startsAt = STARTS_AT.minusSeconds(7200);
+        Instant endsAt = STARTS_AT.minusSeconds(3600);
+        Lesson lesson = lesson();
+        lesson.setId("lesson");
+        lesson.setStartsAt(startsAt);
+        lesson.setEndsAt(endsAt);
+        lesson.setStatus(LessonStatus.IN_PROGRESS);
+        when(lessonRepository.findById("lesson")).thenReturn(Optional.of(lesson));
+        stubReferences();
+        when(lessonRepository.save(any(Lesson.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        LessonDtos.Response response = service.update("lesson", request(
+                "cohort",
+                startsAt,
+                endsAt,
+                LessonStatus.COMPLETED
+        ));
+
+        assertEquals(LessonStatus.COMPLETED, response.status());
+    }
+
+    @Test
+    void shouldRejectInProgressStatusBeforeTheLessonStarts() {
+        Lesson lesson = lesson();
+        lesson.setId("lesson");
+        when(lessonRepository.findById("lesson")).thenReturn(Optional.of(lesson));
+        stubReferences();
+
+        BusinessRuleException exception = assertThrows(
+                BusinessRuleException.class,
+                () -> service.update("lesson", request(
+                        "cohort",
+                        STARTS_AT.plusSeconds(3600),
+                        ENDS_AT.plusSeconds(3600),
+                        LessonStatus.IN_PROGRESS
+                ))
+        );
+
+        assertEquals(
+                "IN_PROGRESS status requires the current time to be inside the lesson period",
+                exception.getMessage()
+        );
+        verify(lessonRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldRejectMovingARegularRosterToAnotherCohort() {
+        Lesson lesson = lesson();
+        lesson.setId("lesson");
+        Cohort targetCohort = new Cohort();
+        targetCohort.setId("target-cohort");
+        targetCohort.setStartDate(LocalDate.of(2026, 1, 1));
+        targetCohort.setEndDate(LocalDate.of(2026, 12, 31));
+        targetCohort.setStatus(CohortStatus.ACTIVE);
+
+        Learner learner = new Learner();
+        learner.setId("learner");
+        learner.setStatus(dev.lourencogabriel.inatead.shared.model.RecordStatus.ACTIVE);
+        var learnerPerson = new Person();
+        learnerPerson.setStatus(dev.lourencogabriel.inatead.shared.model.RecordStatus.ACTIVE);
+        learner.setPerson(learnerPerson);
+        Contract contract = new Contract();
+        contract.setLearner(learner);
+        contract.setStatus(dev.lourencogabriel.inatead.shared.model.ContractStatus.ACTIVE);
+        CohortEnrollment enrollment = new CohortEnrollment();
+        enrollment.setContract(contract);
+        enrollment.setCohort(cohort);
+        enrollment.setStartDate(LocalDate.of(2026, 1, 1));
+        enrollment.setEndDate(LocalDate.of(2026, 12, 31));
+        enrollment.setStatus(EnrollmentStatus.ACTIVE);
+        LessonParticipant participant = new LessonParticipant();
+        participant.setLesson(lesson);
+        participant.setLearner(learner);
+        participant.setSourceEnrollment(enrollment);
+        participant.setParticipationType(ParticipationType.REGULAR);
+        participant.setStatus(ParticipationStatus.EXPECTED);
+
+        when(lessonRepository.findById("lesson")).thenReturn(Optional.of(lesson));
+        when(cohortRepository.findById("target-cohort")).thenReturn(Optional.of(targetCohort));
+        when(personRepository.findById("instructor")).thenReturn(Optional.of(instructor));
+        when(userRepository.existsActivePersonWithRole(
+                "instructor",
+                UserAccountStatus.ACTIVE,
+                "INSTRUCTOR"
+        )).thenReturn(true);
+        when(participantRepository.findAllByLesson_Id("lesson"))
+                .thenReturn(List.of(participant));
+
+        BusinessRuleException exception = assertThrows(
+                BusinessRuleException.class,
+                () -> service.update("lesson", request(
+                        "target-cohort",
+                        STARTS_AT,
+                        ENDS_AT,
+                        LessonStatus.SCHEDULED
+                ))
+        );
+
+        assertEquals(
+                "A regular participant must belong to the host cohort",
+                exception.getMessage()
+        );
+        verify(lessonRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldRejectMovingALessonOutsideAnExistingEnrollmentPeriod() {
+        Lesson lesson = lesson();
+        lesson.setId("lesson");
+
+        Learner learner = new Learner();
+        learner.setId("learner");
+        learner.setStatus(dev.lourencogabriel.inatead.shared.model.RecordStatus.ACTIVE);
+        var learnerPerson = new Person();
+        learnerPerson.setStatus(dev.lourencogabriel.inatead.shared.model.RecordStatus.ACTIVE);
+        learner.setPerson(learnerPerson);
+        Contract contract = new Contract();
+        contract.setLearner(learner);
+        contract.setStatus(dev.lourencogabriel.inatead.shared.model.ContractStatus.ACTIVE);
+        CohortEnrollment enrollment = new CohortEnrollment();
+        enrollment.setContract(contract);
+        enrollment.setCohort(cohort);
+        enrollment.setStartDate(LocalDate.of(2026, 1, 1));
+        enrollment.setEndDate(LocalDate.of(2026, 9, 10));
+        enrollment.setStatus(EnrollmentStatus.ACTIVE);
+        LessonParticipant participant = new LessonParticipant();
+        participant.setLesson(lesson);
+        participant.setLearner(learner);
+        participant.setSourceEnrollment(enrollment);
+        participant.setParticipationType(ParticipationType.REGULAR);
+        participant.setStatus(ParticipationStatus.EXPECTED);
+
+        when(lessonRepository.findById("lesson")).thenReturn(Optional.of(lesson));
+        stubReferences();
+        when(participantRepository.findAllByLesson_Id("lesson"))
+                .thenReturn(List.of(participant));
+
+        BusinessRuleException exception = assertThrows(
+                BusinessRuleException.class,
+                () -> service.update("lesson", request(
+                        "cohort",
+                        STARTS_AT.plusSeconds(86400),
+                        ENDS_AT.plusSeconds(86400),
+                        LessonStatus.SCHEDULED
+                ))
+        );
+
+        assertEquals(
+                "The source enrollment is not active on the lesson date",
+                exception.getMessage()
+        );
+        verify(lessonRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldUseTheApplicationTimeZoneForTheCohortDateBoundary() {
+        cohort.setStartDate(LocalDate.of(2026, 9, 10));
+        cohort.setEndDate(LocalDate.of(2026, 9, 10));
+        stubReferences();
+        when(lessonRepository.save(any(Lesson.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        LessonDtos.Response response = service.create(request(
+                "cohort",
+                Instant.parse("2026-09-11T01:00:00Z"),
+                Instant.parse("2026-09-11T02:00:00Z"),
+                LessonStatus.SCHEDULED
+        ));
+
+        assertEquals("cohort", response.cohortId());
+    }
+
+    @Test
+    void shouldRejectDeletingANonScheduledLesson() {
+        Lesson lesson = lesson();
+        lesson.setId("lesson");
+        lesson.setStatus(LessonStatus.COMPLETED);
+        when(lessonRepository.findById("lesson")).thenReturn(Optional.of(lesson));
+
+        BusinessRuleException exception = assertThrows(
+                BusinessRuleException.class,
+                () -> service.delete("lesson")
+        );
+
+        assertEquals("Only a scheduled lesson can be deleted", exception.getMessage());
+        verify(lessonRepository, never()).delete(any());
+    }
+
+    @Test
+    void shouldRejectDeletingALessonWithParticipants() {
+        Lesson lesson = lesson();
+        lesson.setId("lesson");
+        when(lessonRepository.findById("lesson")).thenReturn(Optional.of(lesson));
+        when(participantRepository.existsByLesson_Id("lesson")).thenReturn(true);
+
+        BusinessRuleException exception = assertThrows(
+                BusinessRuleException.class,
+                () -> service.delete("lesson")
+        );
+
+        assertEquals("A lesson with participants cannot be deleted", exception.getMessage());
+        verify(lessonRepository, never()).delete(any());
+    }
+
+    @Test
+    void shouldRejectDeletingALessonWithActivities() {
+        Lesson lesson = lesson();
+        lesson.setId("lesson");
+        when(lessonRepository.findById("lesson")).thenReturn(Optional.of(lesson));
+        when(activityRepository.existsByLesson_Id("lesson")).thenReturn(true);
+
+        BusinessRuleException exception = assertThrows(
+                BusinessRuleException.class,
+                () -> service.delete("lesson")
+        );
+
+        assertEquals("A lesson with activities cannot be deleted", exception.getMessage());
+        verify(lessonRepository, never()).delete(any());
+    }
+
+    @Test
+    void shouldDeleteAnEmptyScheduledLesson() {
+        Lesson lesson = lesson();
+        lesson.setId("lesson");
+        when(lessonRepository.findById("lesson")).thenReturn(Optional.of(lesson));
+
+        service.delete("lesson");
+
+        verify(lessonRepository).delete(lesson);
+    }
+
     private void stubReferences() {
         when(cohortRepository.findById("cohort")).thenReturn(Optional.of(cohort));
         when(personRepository.findById("instructor")).thenReturn(Optional.of(instructor));
@@ -180,17 +515,30 @@ class LessonServiceScheduleConflictTest {
     }
 
     private LessonDtos.Request request() {
+        return request(LessonStatus.SCHEDULED);
+    }
+
+    private LessonDtos.Request request(LessonStatus status) {
+        return request("cohort", STARTS_AT, ENDS_AT, status);
+    }
+
+    private LessonDtos.Request request(
+            String cohortId,
+            Instant startsAt,
+            Instant endsAt,
+            LessonStatus status
+    ) {
         return new LessonDtos.Request(
-                "cohort",
+                cohortId,
                 "instructor",
                 "Schedule conflict test",
-                STARTS_AT,
-                ENDS_AT,
+                startsAt,
+                endsAt,
                 DeliveryMode.ONSITE,
                 "Room 1",
                 null,
                 "https://www.youtube.com/watch?v=lesson-test",
-                LessonStatus.SCHEDULED
+                status
         );
     }
 

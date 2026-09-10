@@ -7,6 +7,7 @@ import dev.lourencogabriel.inatead.notification.model.NotificationRecipient;
 import dev.lourencogabriel.inatead.notification.repository.NotificationRecipientRepository;
 import dev.lourencogabriel.inatead.shared.model.NotificationChannel;
 import dev.lourencogabriel.inatead.shared.model.NotificationDeliveryStatus;
+import dev.lourencogabriel.inatead.shared.model.UserAccountStatus;
 import dev.lourencogabriel.inatead.user.model.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -99,6 +100,28 @@ class NotificationEmailDeliveryServiceTest {
                 "Olá, Recipient!\n\nComplete your activity.\n\nAcesse: /activities/1\n\nINAT EAD"
         );
         verify(this.recipientRepository, never()).save(recipient);
+    }
+
+    @Test
+    void shouldCancelQueuedEmailWhenRecipientAccountIsInactive() {
+        NotificationRecipient recipient = recipient();
+        recipient.getRecipientUser().setStatus(UserAccountStatus.DISABLED);
+        when(this.recipientRepository.findByIdForDelivery("recipient-1"))
+                .thenReturn(Optional.of(recipient));
+
+        this.service.deliver("recipient-1");
+
+        assertEquals(NotificationDeliveryStatus.CANCELLED, recipient.getDeliveryStatus());
+        assertEquals(
+                "Email delivery cancelled because the recipient account is not active",
+                recipient.getFailureReason()
+        );
+        verify(this.emailSender, never()).send(
+                "recipient@example.com",
+                "Activity available",
+                "Olá, Recipient!\n\nComplete your activity.\n\nAcesse: /activities/1\n\nINAT EAD"
+        );
+        verify(this.recipientRepository).save(recipient);
     }
 
     private NotificationRecipient recipient() {

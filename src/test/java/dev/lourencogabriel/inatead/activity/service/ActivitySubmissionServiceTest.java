@@ -141,11 +141,47 @@ class ActivitySubmissionServiceTest {
         verify(this.notificationService, never()).notifySubmitted(any(ActivitySubmission.class));
     }
 
+    @Test
+    void shouldRejectSubmissionWhenTheLessonIsScheduled() {
+        Lesson lesson = new Lesson();
+        lesson.setId("lesson-1");
+        lesson.setStatus(LessonStatus.SCHEDULED);
+        Activity activity = new Activity();
+        activity.setId("activity-1");
+        activity.setLesson(lesson);
+        activity.setStatus(ActivityStatus.PUBLISHED);
+        activity.setDueAt(Instant.parse("2100-01-01T00:00:00Z"));
+        Learner learner = new Learner();
+        learner.setId("learner-1");
+        when(this.submissionRepository.existsByActivity_IdAndLearner_Id(
+                "activity-1",
+                "learner-1"
+        )).thenReturn(false);
+        when(this.activityRepository.findById("activity-1")).thenReturn(Optional.of(activity));
+        when(this.learnerRepository.findById("learner-1")).thenReturn(Optional.of(learner));
+
+        BusinessRuleException exception = assertThrows(
+                BusinessRuleException.class,
+                () -> this.service.create(request(SubmissionStatus.SUBMITTED), "actor-user")
+        );
+
+        assertEquals(
+                "Activities from scheduled lessons cannot receive submissions",
+                exception.getMessage()
+        );
+        verify(this.submissionRepository, never()).save(any(ActivitySubmission.class));
+        verify(this.onlineLessonAttendanceService, never())
+                .recordWhenAllActivitiesAreDelivered(any(), any());
+        verify(this.notificationService, never()).notifySubmitted(any(ActivitySubmission.class));
+    }
+
     private Activity stubDependencies() {
         Lesson lesson = new Lesson();
         lesson.setId("lesson-1");
-        lesson.setCohort(new Cohort());
-        lesson.setStatus(LessonStatus.SCHEDULED);
+        Cohort cohort = new Cohort();
+        cohort.setStatus(dev.lourencogabriel.inatead.shared.model.CohortStatus.ACTIVE);
+        lesson.setCohort(cohort);
+        lesson.setStatus(LessonStatus.IN_PROGRESS);
 
         Activity activity = new Activity();
         activity.setId("activity-1");

@@ -75,8 +75,7 @@ class PersonDocumentMultipartControllerTest {
                 {
                   "personId": "person-1",
                   "documentTypeId": 1,
-                  "documentNumber": "123",
-                  "verificationStatus": "PENDING"
+                  "documentNumber": "123"
                 }
                 """;
         return new MockMultipartFile(

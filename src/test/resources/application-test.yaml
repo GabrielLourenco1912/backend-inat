@@ -21,6 +21,9 @@ api:
   academic:
     lifecycle:
       enabled: false
+  document:
+    lifecycle:
+      enabled: false
   notification:
     email:
       enabled: false
@@ -34,3 +37,5 @@ api:
       issuer: http://inat
     refresh-cookie:
       secure: false
+    account-lock:
+      scheduler-enabled: false

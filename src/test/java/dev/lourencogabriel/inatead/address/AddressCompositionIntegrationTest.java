@@ -39,7 +39,8 @@ class AddressCompositionIntegrationTest {
                 null,
                 "41999999999",
                 LocalDate.of(2000, 1, 1),
-                null
+                null,
+                RecordStatus.ACTIVE
         ));
         String addressId = created.address().id();
 
@@ -52,7 +53,8 @@ class AddressCompositionIntegrationTest {
                 null,
                 "41999999999",
                 LocalDate.of(2000, 1, 1),
-                null
+                null,
+                RecordStatus.ACTIVE
         ));
 
         assertEquals(addressId, updated.address().id());

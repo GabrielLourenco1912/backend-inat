@@ -1,12 +1,15 @@
 package dev.lourencogabriel.inatead.user.service;
 
+import dev.lourencogabriel.inatead.auth.service.AccountSecurityService;
 import dev.lourencogabriel.inatead.person.model.Person;
 import dev.lourencogabriel.inatead.person.repository.PersonRepository;
+import dev.lourencogabriel.inatead.shared.model.RecordStatus;
 import dev.lourencogabriel.inatead.shared.model.UserAccountStatus;
 import dev.lourencogabriel.inatead.user.dto.UserDtos;
 import dev.lourencogabriel.inatead.user.model.User;
 import dev.lourencogabriel.inatead.user.repository.UserRepository;
 import dev.lourencogabriel.inatead.user.repository.UserRoleRepository;
+import dev.lourencogabriel.inatead.web.exception.BusinessRuleException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -19,9 +22,12 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -42,6 +48,9 @@ class UserServiceTest {
 
     @Mock
     private UserRoleRepository userRoleRepository;
+
+    @Mock
+    private AccountSecurityService accountSecurityService;
 
     @InjectMocks
     private UserService userService;
@@ -77,6 +86,69 @@ class UserServiceTest {
                 () -> assertFalse(createdUser.isRegulationAccepted()),
                 () -> assertNull(createdUser.getRegulationAcceptedAt()),
                 () -> assertSame(person, createdUser.getPerson())
+        );
+        verify(this.accountSecurityService).applyAdministrativeUpdate(
+                createdUser,
+                UserAccountStatus.ACTIVE,
+                false
+        );
+    }
+
+    @Test
+    void shouldRejectDirectUserCreationForInactivePerson() {
+        UserDtos.CreateRequest request = new UserDtos.CreateRequest(
+                PERSON_ID,
+                "Direct User",
+                "direct@example.com",
+                "plain-password",
+                UserAccountStatus.ACTIVE
+        );
+        Person person = new Person();
+        person.setId(PERSON_ID);
+        person.setStatus(RecordStatus.INACTIVE);
+        when(this.userRepository.existsByEmail("direct@example.com")).thenReturn(false);
+        when(this.userRepository.existsByPerson_Id(PERSON_ID)).thenReturn(false);
+        when(this.personRepository.findById(PERSON_ID)).thenReturn(Optional.of(person));
+
+        BusinessRuleException exception = assertThrows(
+                BusinessRuleException.class,
+                () -> this.userService.create(request)
+        );
+
+        assertEquals("A user account requires an active person", exception.getMessage());
+        verify(this.userRepository, never()).save(any());
+        verify(this.passwordEncoder, never()).encode(any());
+    }
+
+    @Test
+    void shouldKeepLinkedPersonWhenUpdatingUser() {
+        Person linkedPerson = new Person();
+        linkedPerson.setId(PERSON_ID);
+        User user = new User("Current Name", "current@example.com", "encoded-password");
+        user.setUlid(USER_ID);
+        user.setPerson(linkedPerson);
+        user.setStatus(UserAccountStatus.ACTIVE);
+        UserDtos.UpdateRequest request = new UserDtos.UpdateRequest(
+                "Updated Name",
+                "updated@example.com",
+                null,
+                UserAccountStatus.ACTIVE
+        );
+
+        when(this.userRepository.findWithRolesByUlidForUpdate(USER_ID))
+                .thenReturn(Optional.of(user));
+        when(this.userRepository.existsByEmailAndUlidNot("updated@example.com", USER_ID))
+                .thenReturn(false);
+        when(this.userRepository.save(user)).thenReturn(user);
+
+        this.userService.update(USER_ID, request);
+
+        assertSame(linkedPerson, user.getPerson());
+        verify(this.personRepository, never()).findById(any());
+        verify(this.accountSecurityService).applyAdministrativeUpdate(
+                user,
+                UserAccountStatus.ACTIVE,
+                true
         );
     }
 }

@@ -32,17 +32,23 @@ class LessonDtosValidationTest {
 
     @Test
     void shouldAcceptNullBlankAndPublicHttpUrls() {
-        assertTrue(validator.validate(request(null)).isEmpty());
-        assertTrue(validator.validate(request("")).isEmpty());
-        assertTrue(validator.validate(request("https://www.youtube.com/watch?v=abc123")).isEmpty());
-        assertTrue(validator.validate(request("http://media.example.org/classes/lesson.mp4")).isEmpty());
+        assertTrue(validator.validate(request(null, null)).isEmpty());
+        assertTrue(validator.validate(request("", "")).isEmpty());
+        assertTrue(validator.validate(request(
+                "https://meet.example.org/lesson",
+                "https://www.youtube.com/watch?v=abc123"
+        )).isEmpty());
+        assertTrue(validator.validate(request(
+                "http://meet.example.org/room",
+                "http://media.example.org/classes/lesson.mp4"
+        )).isEmpty());
     }
 
     @Test
     void shouldRejectMalformedOrUnsafeExternalLessonUrls() {
-        var invalidScheme = validator.validate(request("javascript:alert(1)"));
-        var missingHost = validator.validate(request("https:///lesson.mp4"));
-        var whitespace = validator.validate(request("https://example.org/aula com espaco"));
+        var invalidScheme = validator.validate(request(null, "javascript:alert(1)"));
+        var missingHost = validator.validate(request(null, "https:///lesson.mp4"));
+        var whitespace = validator.validate(request(null, "https://example.org/aula com espaco"));
 
         assertEquals(1, invalidScheme.size());
         assertEquals(1, missingHost.size());
@@ -51,7 +57,22 @@ class LessonDtosValidationTest {
                 .equals("externalLessonUrl"));
     }
 
-    private LessonDtos.Request request(String externalLessonUrl) {
+    @Test
+    void shouldRejectMalformedMeetingUrlWhenProvided() {
+        var invalidScheme = validator.validate(request("javascript:alert(1)", null));
+        var missingHost = validator.validate(request("https:///meeting", null));
+        var whitespace = validator.validate(request("https://example.org/sala com espaco", null));
+
+        assertEquals(1, invalidScheme.size());
+        assertEquals(1, missingHost.size());
+        assertEquals(1, whitespace.size());
+        assertEquals(
+                "meetingUrl",
+                invalidScheme.iterator().next().getPropertyPath().toString()
+        );
+    }
+
+    private LessonDtos.Request request(String meetingUrl, String externalLessonUrl) {
         return new LessonDtos.Request(
                 "cohort",
                 "instructor",
@@ -60,7 +81,7 @@ class LessonDtosValidationTest {
                 Instant.parse("2026-09-10T15:00:00Z"),
                 DeliveryMode.ONLINE,
                 null,
-                "https://meet.example.org/lesson",
+                meetingUrl,
                 externalLessonUrl,
                 LessonStatus.SCHEDULED
         );

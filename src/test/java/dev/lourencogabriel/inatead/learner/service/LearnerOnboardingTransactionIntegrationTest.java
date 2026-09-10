@@ -46,7 +46,8 @@ class LearnerOnboardingTransactionIntegrationTest {
                         null,
                         "41999999999",
                         LocalDate.of(2010, 1, 1),
-                        null
+                        null,
+                        RecordStatus.ACTIVE
                 ),
                 new LearnerOnboardingDtos.LearnerProfile(
                         registrationNumber,

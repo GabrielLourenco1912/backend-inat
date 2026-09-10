@@ -17,6 +17,7 @@ import dev.lourencogabriel.inatead.organization.repository.OrganizationRepositor
 import dev.lourencogabriel.inatead.person.model.Person;
 import dev.lourencogabriel.inatead.shared.model.ActivityStatus;
 import dev.lourencogabriel.inatead.shared.model.OrganizationType;
+import dev.lourencogabriel.inatead.shared.model.UserAccountStatus;
 import dev.lourencogabriel.inatead.user.model.Role;
 import dev.lourencogabriel.inatead.user.model.User;
 import dev.lourencogabriel.inatead.user.model.UserRole;
@@ -113,6 +114,14 @@ class DomainAuthorizationTest {
     void shouldRejectCompanyManagerForASchoolEvenWithAnActiveMembership() {
         employer.setOrganizationType(OrganizationType.SCHOOL);
 
+        assertFalse(authorization.canAccessOrganization(authentication, "employer"));
+    }
+
+    @Test
+    void shouldRejectRolesReloadedFromAnInactiveAccount() {
+        manager.setStatus(UserAccountStatus.DISABLED);
+
+        assertFalse(authorization.hasAnyRole(authentication, "EMPLOYER_MANAGER"));
         assertFalse(authorization.canAccessOrganization(authentication, "employer"));
     }
 

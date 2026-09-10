@@ -80,6 +80,39 @@ class FileSystemStorageTest {
         );
     }
 
+    @Test
+    void shouldReuseChecksumAddressedBinary() throws Exception {
+        FileSystemStorage storage = storageWithLimit(1024);
+        byte[] content = "same content".getBytes(StandardCharsets.UTF_8);
+
+        StoredBinary first = storage.store(new ByteArrayInputStream(content));
+        StoredBinary second = storage.store(new ByteArrayInputStream(content));
+
+        assertTrue(first.newlyCreated());
+        assertFalse(second.newlyCreated());
+        assertEquals(first.storageKey(), second.storageKey());
+        assertEquals(first.checksumSha256(), second.checksumSha256());
+        try (var files = Files.walk(root)) {
+            assertEquals(1, files.filter(Files::isRegularFile).count());
+        }
+    }
+
+    @Test
+    void shouldRejectAConflictingBinaryAtTheChecksumPath() throws Exception {
+        FileSystemStorage storage = storageWithLimit(1024);
+        byte[] content = "same content".getBytes(StandardCharsets.UTF_8);
+        StoredBinary first = storage.store(new ByteArrayInputStream(content));
+        Files.write(
+                root.resolve(first.storageKey()),
+                "bad content!".getBytes(StandardCharsets.UTF_8)
+        );
+
+        assertThrows(
+                FileStorageException.class,
+                () -> storage.store(new ByteArrayInputStream(content))
+        );
+    }
+
     private FileSystemStorage storageWithLimit(long bytes) {
         FileSystemStorageProperties properties = new FileSystemStorageProperties();
         properties.setRoot(root);

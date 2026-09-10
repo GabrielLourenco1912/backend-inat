@@ -13,6 +13,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.security.oauth2.jwt.JwtException;
 
 import java.nio.charset.StandardCharsets;
@@ -59,6 +60,7 @@ class TokenServiceTest {
     @Test
     void shouldGenerateAndPersistHashedRefreshToken() {
         User user = this.user();
+        user.setTokenVersion(7L);
         this.prepareTokenGeneration(user);
         String longIpAddress = "1".repeat(50);
 
@@ -69,6 +71,9 @@ class TokenServiceTest {
         );
 
         ArgumentCaptor<RefreshToken> tokenCaptor = ArgumentCaptor.forClass(RefreshToken.class);
+        ArgumentCaptor<JwtEncoderParameters> jwtCaptor =
+                ArgumentCaptor.forClass(JwtEncoderParameters.class);
+        verify(this.jwtEncoder).encode(jwtCaptor.capture());
         verify(this.refreshTokenRepository).save(tokenCaptor.capture());
         RefreshToken persistedToken = tokenCaptor.getValue();
 
@@ -82,6 +87,12 @@ class TokenServiceTest {
                 () -> assertSame(user, persistedToken.getUser()),
                 () -> assertEquals("integration-test-agent", persistedToken.getUserAgent()),
                 () -> assertEquals(45, persistedToken.getIpAddress().length()),
+                () -> assertEquals(
+                        7L,
+                        ((Number) jwtCaptor.getValue().getClaims().getClaim(
+                                TokenService.TOKEN_VERSION_CLAIM
+                        )).longValue()
+                ),
                 () -> assertTrue(persistedToken.getExpiresAt().isAfter(Instant.now().plus(29, ChronoUnit.DAYS)))
         );
     }

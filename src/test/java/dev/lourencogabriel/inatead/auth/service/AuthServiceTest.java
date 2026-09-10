@@ -3,6 +3,7 @@ package dev.lourencogabriel.inatead.auth.service;
 import dev.lourencogabriel.inatead.auth.dto.AuthResponse;
 import dev.lourencogabriel.inatead.auth.dto.AuthChallengeResponse;
 import dev.lourencogabriel.inatead.auth.dto.RegisterRequest;
+import dev.lourencogabriel.inatead.auth.exception.PasswordResetUnavailableException;
 import dev.lourencogabriel.inatead.auth.model.AuthChallengePurpose;
 import dev.lourencogabriel.inatead.person.model.Person;
 import dev.lourencogabriel.inatead.person.repository.PersonRepository;
@@ -12,13 +13,18 @@ import dev.lourencogabriel.inatead.user.exception.PersonNotFoundForRegistrationE
 import dev.lourencogabriel.inatead.user.model.User;
 import dev.lourencogabriel.inatead.user.repository.UserRepository;
 import dev.lourencogabriel.inatead.shared.model.UserAccountStatus;
+import dev.lourencogabriel.inatead.shared.model.RecordStatus;
+import dev.lourencogabriel.inatead.web.exception.BusinessRuleException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -57,6 +63,9 @@ class AuthServiceTest {
     @Mock
     private AuthChallengeService challengeService;
 
+    @Mock
+    private AccountSecurityService accountSecurityService;
+
     private AuthService authService;
 
     @BeforeEach
@@ -67,7 +76,8 @@ class AuthServiceTest {
                 this.passwordEncoder,
                 this.authenticationManager,
                 this.tokenService,
-                this.challengeService
+                this.challengeService,
+                this.accountSecurityService
         );
     }
 
@@ -104,7 +114,29 @@ class AuthServiceTest {
                 () -> assertEquals("test@example.com", authenticationCaptor.getValue().getPrincipal()),
                 () -> assertEquals("plain-password", authenticationCaptor.getValue().getCredentials())
         );
+        verify(this.accountSecurityService).unlockExpiredByEmail("test@example.com");
         verifyNoInteractions(this.tokenService);
+    }
+
+    @Test
+    void shouldCountARejectedPasswordAttempt() {
+        BadCredentialsException expected = new BadCredentialsException("Bad credentials");
+        when(this.authenticationManager.authenticate(any())).thenThrow(expected);
+
+        BadCredentialsException thrown = assertThrows(
+                BadCredentialsException.class,
+                () -> this.authService.authenticate(
+                        "Test@Example.com",
+                        "wrong-password",
+                        "agent",
+                        "203.0.113.10"
+                )
+        );
+
+        assertSame(expected, thrown);
+        verify(this.accountSecurityService).unlockExpiredByEmail("test@example.com");
+        verify(this.accountSecurityService).recordFailedAuthentication("test@example.com");
+        verifyNoInteractions(this.challengeService, this.tokenService);
     }
 
     @Test
@@ -233,6 +265,91 @@ class AuthServiceTest {
 
         verify(this.userRepository, never()).save(any());
         verifyNoInteractions(this.passwordEncoder, this.tokenService, this.challengeService);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = RecordStatus.class, names = {"INACTIVE", "SUSPENDED"})
+    void shouldRejectRegistrationWhenPersonIsNotActive(RecordStatus personStatus) {
+        RegisterRequest request = this.registerRequest("test@example.com");
+        Person person = this.person();
+        person.setStatus(personStatus);
+        when(this.userRepository.existsByEmail(request.email())).thenReturn(false);
+        when(this.personRepository.findByContactEmailIgnoreCase(request.email()))
+                .thenReturn(Optional.of(person));
+
+        BusinessRuleException exception = assertThrows(
+                BusinessRuleException.class,
+                () -> this.authService.register(request, null, null)
+        );
+
+        assertEquals("User registration requires an active person", exception.getMessage());
+        verify(this.userRepository, never()).existsByPerson_Id(any());
+        verify(this.userRepository, never()).save(any());
+        verifyNoInteractions(this.passwordEncoder, this.tokenService, this.challengeService);
+    }
+
+    @Test
+    void shouldIssuePasswordResetChallengeForActiveUser() {
+        User user = this.user();
+        AuthChallengeResponse expectedResponse = this.challenge(
+                AuthChallengePurpose.PASSWORD_RESET
+        );
+        when(this.userRepository.findByEmailForUpdate("test@example.com"))
+                .thenReturn(Optional.of(user));
+        when(this.challengeService.issue(
+                user,
+                AuthChallengePurpose.PASSWORD_RESET,
+                "agent",
+                "203.0.113.10"
+        )).thenReturn(expectedResponse);
+
+        AuthChallengeResponse response = this.authService.requestPasswordReset(
+                "Test@Example.com",
+                "agent",
+                "203.0.113.10"
+        );
+
+        assertSame(expectedResponse, response);
+        verify(this.accountSecurityService).unlockExpiredByEmail("test@example.com");
+        verifyNoInteractions(this.tokenService);
+    }
+
+    @Test
+    void shouldRejectPasswordResetRequestForDisabledUser() {
+        User user = this.user();
+        user.setStatus(UserAccountStatus.DISABLED);
+        when(this.userRepository.findByEmailForUpdate("test@example.com"))
+                .thenReturn(Optional.of(user));
+
+        assertThrows(
+                PasswordResetUnavailableException.class,
+                () -> this.authService.requestPasswordReset(
+                        "test@example.com",
+                        null,
+                        null
+                )
+        );
+
+        verify(this.accountSecurityService).unlockExpiredByEmail("test@example.com");
+        verifyNoInteractions(this.challengeService, this.tokenService);
+    }
+
+    @Test
+    void shouldResetPasswordWithoutIssuingAuthentication() {
+        User user = this.user();
+        when(this.challengeService.verifyPasswordReset("challenge-id", "123456"))
+                .thenReturn(user);
+        when(this.passwordEncoder.encode("new-password")).thenReturn("new-password-hash");
+
+        this.authService.resetPassword("challenge-id", "123456", "new-password");
+
+        assertEquals("new-password-hash", user.getPassword());
+        verify(this.accountSecurityService).applyAdministrativeUpdate(
+                user,
+                UserAccountStatus.ACTIVE,
+                true
+        );
+        verifyNoInteractions(this.tokenService);
     }
 
     @Test

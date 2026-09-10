@@ -11,6 +11,7 @@ import dev.lourencogabriel.inatead.cohort.model.Cohort;
 import dev.lourencogabriel.inatead.cohort.repository.CohortRepository;
 import dev.lourencogabriel.inatead.document.model.StoredFile;
 import dev.lourencogabriel.inatead.document.repository.StoredFileRepository;
+import dev.lourencogabriel.inatead.document.storage.FileUploadPurpose;
 import dev.lourencogabriel.inatead.lesson.model.Lesson;
 import dev.lourencogabriel.inatead.lesson.repository.LessonRepository;
 import dev.lourencogabriel.inatead.person.model.Person;
@@ -90,12 +91,16 @@ class StoredFileLifecycleIntegrationTest {
         byte[] content = "document content".getBytes(StandardCharsets.UTF_8);
         MockMultipartFile upload = new MockMultipartFile(
                 "file",
-                "document.pdf",
-                "application/pdf",
+                "document.txt",
+                MediaType.TEXT_PLAIN_VALUE,
                 content
         );
 
-        String fileId = transactionTemplate.execute(status -> service.store(upload, userId).getId());
+        String fileId = transactionTemplate.execute(status -> service.store(
+                upload,
+                userId,
+                FileUploadPurpose.ACTIVITY_MATERIAL
+        ).getId());
         StoredFile stored = fileRepository.findById(fileId).orElseThrow();
         Path storedPath = STORAGE_ROOT.resolve(stored.getStorageKey());
 
@@ -129,7 +134,7 @@ class StoredFileLifecycleIntegrationTest {
         );
 
         assertThrows(IntentionalRollback.class, () -> transactionTemplate.executeWithoutResult(status -> {
-            service.store(upload, userId);
+            service.store(upload, userId, FileUploadPurpose.ACTIVITY_MATERIAL);
             throw new IntentionalRollback();
         }));
 
@@ -178,6 +183,52 @@ class StoredFileLifecycleIntegrationTest {
 
         assertFalse(fileRepository.existsById(fileId));
         assertFalse(Files.exists(storedPath));
+    }
+
+    @Test
+    void shouldDeduplicateBinaryAndKeepItUntilLastMetadataReferenceIsDeleted() throws Exception {
+        String userId = createUser();
+        byte[] content = "deduplicated content".getBytes(StandardCharsets.UTF_8);
+        MockMultipartFile firstUpload = new MockMultipartFile(
+                "file",
+                "first.txt",
+                MediaType.TEXT_PLAIN_VALUE,
+                content
+        );
+        MockMultipartFile secondUpload = new MockMultipartFile(
+                "file",
+                "second.txt",
+                MediaType.TEXT_PLAIN_VALUE,
+                content
+        );
+
+        long binaryCountBefore = binaryCount();
+        String firstId = transactionTemplate.execute(status -> service.store(
+                firstUpload,
+                userId,
+                FileUploadPurpose.ACTIVITY_MATERIAL
+        ).getId());
+        String secondId = transactionTemplate.execute(status -> service.store(
+                secondUpload,
+                userId,
+                FileUploadPurpose.ACTIVITY_MATERIAL
+        ).getId());
+
+        StoredFile first = fileRepository.findById(firstId).orElseThrow();
+        StoredFile second = fileRepository.findById(secondId).orElseThrow();
+        Path sharedPath = STORAGE_ROOT.resolve(first.getStorageKey());
+        assertEquals(first.getStorageKey(), second.getStorageKey());
+        assertEquals(binaryCountBefore + 1, binaryCount());
+
+        transactionTemplate.executeWithoutResult(status -> service.delete(
+                fileRepository.findById(firstId).orElseThrow()
+        ));
+        assertTrue(Files.exists(sharedPath));
+
+        transactionTemplate.executeWithoutResult(status -> service.delete(
+                fileRepository.findById(secondId).orElseThrow()
+        ));
+        assertFalse(Files.exists(sharedPath));
     }
 
     private String createUser() {

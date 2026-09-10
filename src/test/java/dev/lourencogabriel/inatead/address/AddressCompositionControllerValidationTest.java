@@ -48,7 +48,8 @@ class AddressCompositionControllerValidationTest {
                                   "taxId": "12345678909",
                                   "contactEmail": "joao@example.com",
                                   "phoneNumber": "41999999999",
-                                  "birthDate": "2000-01-01"
+                                  "birthDate": "2000-01-01",
+                                  "status": "ACTIVE"
                                 }
                                 """))
                 .andExpect(status().isBadRequest())

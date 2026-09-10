@@ -225,7 +225,8 @@ class LearnerOnboardingServiceTest {
                 "joao@example.com",
                 "41999999999",
                 birthDate,
-                null
+                null,
+                RecordStatus.ACTIVE
         );
     }
 
@@ -239,6 +240,7 @@ class LearnerOnboardingServiceTest {
                 request.phoneNumber(),
                 request.birthDate(),
                 request.gender(),
+                request.status(),
                 null,
                 null
         );

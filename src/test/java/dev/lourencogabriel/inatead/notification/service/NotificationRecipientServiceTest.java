@@ -73,4 +73,26 @@ class NotificationRecipientServiceTest {
         );
     }
 
+    @Test
+    void shouldRejectDeliveryTransitionAfterCancellation() {
+        NotificationRecipient recipient = new NotificationRecipient();
+        recipient.setId("delivery");
+        recipient.setNotification(notification);
+        recipient.setRecipientUser(recipientUser);
+        recipient.setChannel(NotificationChannel.EMAIL);
+        recipient.setDeliveryStatus(NotificationDeliveryStatus.CANCELLED);
+        when(recipientRepository.findById("delivery")).thenReturn(Optional.of(recipient));
+
+        assertThrows(
+                BusinessRuleException.class,
+                () -> service.updateDelivery(
+                        "delivery",
+                        new NotificationRecipientDtos.DeliveryRequest(
+                                NotificationDeliveryStatus.PENDING,
+                                null
+                        )
+                )
+        );
+    }
+
 }

@@ -35,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -48,6 +49,8 @@ class AuthChallengeServiceTest {
     private AuthChallengeRepository challengeRepository;
     @Mock
     private EmailSender emailSender;
+    @Mock
+    private AccountSecurityService accountSecurityService;
 
     private AuthChallengeService service;
     private AtomicReference<AuthChallenge> savedChallenge;
@@ -65,6 +68,7 @@ class AuthChallengeServiceTest {
                 this.emailSender,
                 secretKey,
                 Clock.fixed(NOW, ZoneOffset.UTC),
+                this.accountSecurityService,
                 Duration.ofMinutes(10),
                 2
         );
@@ -155,6 +159,8 @@ class AuthChallengeServiceTest {
         );
         assertEquals(2, challenge.getFailedAttempts());
         assertNotNull(challenge.getConsumedAt());
+        verify(this.accountSecurityService, times(2))
+                .recordFailedAuthentication(challenge.getUser());
     }
 
     @Test
@@ -192,6 +198,49 @@ class AuthChallengeServiceTest {
 
         assertNull(user.getEmailVerifiedAt());
         assertNotNull(challenge.getConsumedAt());
+    }
+
+    @Test
+    void shouldVerifyPasswordResetWithoutChangingAccountState() {
+        User user = verifiedUser();
+        Instant verifiedAt = user.getEmailVerifiedAt();
+        this.service.issue(user, AuthChallengePurpose.PASSWORD_RESET, null, null);
+        AuthChallenge challenge = this.savedChallenge.get();
+        when(this.challengeRepository.findWithUserById(challenge.getId()))
+                .thenReturn(Optional.of(challenge));
+
+        User verified = this.service.verifyPasswordReset(challenge.getId(), issuedCode());
+
+        assertEquals(user, verified);
+        assertEquals(UserAccountStatus.ACTIVE, user.getStatus());
+        assertEquals(verifiedAt, user.getEmailVerifiedAt());
+        assertEquals(NOW, challenge.getConsumedAt());
+        verify(this.accountSecurityService).recordSuccessfulAuthentication(user);
+        verify(this.emailSender).send(
+                eq("test@example.com"),
+                eq("Redefina sua senha no INAT EAD"),
+                any()
+        );
+    }
+
+    @Test
+    void shouldNotAcceptPasswordResetChallengeAsAuthentication() {
+        this.service.issue(
+                verifiedUser(),
+                AuthChallengePurpose.PASSWORD_RESET,
+                null,
+                null
+        );
+        AuthChallenge challenge = this.savedChallenge.get();
+        when(this.challengeRepository.findWithUserById(challenge.getId()))
+                .thenReturn(Optional.of(challenge));
+
+        assertThrows(
+                InvalidAuthChallengeException.class,
+                () -> this.service.verify(challenge.getId(), issuedCode())
+        );
+
+        assertEquals(NOW, challenge.getConsumedAt());
     }
 
     private User verifiedUser() {
