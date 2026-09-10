@@ -5,6 +5,7 @@ import dev.lourencogabriel.inatead.shared.model.DocumentVerificationStatus;
 import dev.lourencogabriel.inatead.shared.persistence.AuditedEntity;
 import dev.lourencogabriel.inatead.user.model.User;
 import jakarta.persistence.Column;
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -13,6 +14,8 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
@@ -21,15 +24,33 @@ import lombok.Setter;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(
         name = "person_documents",
-        indexes = @Index(
-                name = "idx_person_documents_person_type",
-                columnList = "person_id,document_type_id"
-        ),
-        uniqueConstraints = @UniqueConstraint(name = "uk_person_documents_file", columnNames = "file_id")
+        indexes = {
+                @Index(
+                        name = "idx_person_documents_person_type",
+                        columnList = "person_id,document_type_id"
+                ),
+                @Index(
+                        name = "idx_person_documents_status_expiration",
+                        columnList = "verification_status,expires_on"
+                )
+        },
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_person_documents_file", columnNames = "file_id"),
+                @UniqueConstraint(
+                        name = "uk_person_documents_person_type",
+                        columnNames = {"person_id", "document_type_id"}
+                ),
+                @UniqueConstraint(
+                        name = "uk_person_documents_type_number",
+                        columnNames = {"document_type_id", "document_number"}
+                )
+        }
 )
 @Getter
 @Setter
@@ -59,12 +80,21 @@ public class PersonDocument extends AuditedEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "verification_status", length = 20, nullable = false)
-    private DocumentVerificationStatus verificationStatus = DocumentVerificationStatus.PENDING;
+    private DocumentVerificationStatus verificationStatus = DocumentVerificationStatus.VERIFIED;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "verified_by_user_id")
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "verified_by_user_id", nullable = false)
     private User verifiedByUser;
 
-    @Column(name = "verified_at")
+    @Column(name = "verified_at", nullable = false)
     private Instant verifiedAt;
+
+    @OneToMany(mappedBy = "document", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("changedAt ASC")
+    private List<PersonDocumentStatusHistory> statusHistory = new ArrayList<>();
+
+    public void addStatusHistory(PersonDocumentStatusHistory history) {
+        history.setDocument(this);
+        statusHistory.add(history);
+    }
 }

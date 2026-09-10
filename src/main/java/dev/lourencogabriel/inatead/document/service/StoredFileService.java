@@ -3,15 +3,16 @@ package dev.lourencogabriel.inatead.document.service;
 import dev.lourencogabriel.inatead.document.dto.StoredFileDtos;
 import dev.lourencogabriel.inatead.document.model.StoredFile;
 import dev.lourencogabriel.inatead.document.repository.StoredFileRepository;
+import dev.lourencogabriel.inatead.document.storage.FileContentValidator;
 import dev.lourencogabriel.inatead.document.storage.FileStorageException;
 import dev.lourencogabriel.inatead.document.storage.FileSystemStorage;
 import dev.lourencogabriel.inatead.document.storage.FileTooLargeException;
+import dev.lourencogabriel.inatead.document.storage.FileUploadPurpose;
 import dev.lourencogabriel.inatead.document.storage.StoredBinary;
 import dev.lourencogabriel.inatead.shared.persistence.EntityLookup;
 import dev.lourencogabriel.inatead.user.repository.UserRepository;
 import dev.lourencogabriel.inatead.web.exception.BusinessRuleException;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -23,36 +24,52 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class StoredFileService {
 
     private final StoredFileRepository fileRepository;
     private final UserRepository userRepository;
     private final FileSystemStorage storage;
+    private final FileContentValidator contentValidator;
+    private final StoredFileCleanupService cleanupService;
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public StoredFile store(MultipartFile upload, String actorUserId) {
+    public StoredFile store(
+            MultipartFile upload,
+            String actorUserId,
+            FileUploadPurpose purpose
+    ) {
         validateUpload(upload);
         requireTransactionSynchronization();
         var uploadedBy = EntityLookup.require(userRepository, actorUserId, "User");
+        String originalName = normalizeOriginalName(upload.getOriginalFilename());
+        String declaredMimeType = normalizeMimeType(upload.getContentType());
+        AtomicReference<String> detectedMimeType = new AtomicReference<>();
 
         StoredBinary binary;
         try {
             InputStream content = upload.getInputStream();
-            binary = storage.store(content);
+            binary = storage.store(content, temporaryFile -> detectedMimeType.set(
+                    contentValidator.validate(
+                            temporaryFile,
+                            originalName,
+                            declaredMimeType,
+                            purpose
+                    )
+            ));
         } catch (IOException ex) {
             throw new FileStorageException("Could not read uploaded file content", ex);
         }
-        registerRollbackCleanup(binary.storageKey());
+        registerRollbackCleanup(binary.storageKey(), binary.newlyCreated());
 
         StoredFile file = new StoredFile();
         file.setUploadedByUser(uploadedBy);
         file.setStorageKey(binary.storageKey());
-        file.setOriginalName(normalizeOriginalName(upload.getOriginalFilename()));
-        file.setMimeType(normalizeMimeType(upload.getContentType()));
+        file.setOriginalName(originalName);
+        file.setMimeType(detectedMimeType.get());
         file.setSizeBytes(binary.sizeBytes());
         file.setChecksumSha256(binary.checksumSha256());
         return fileRepository.save(file);
@@ -132,13 +149,16 @@ public class StoredFileService {
         }
     }
 
-    private void registerRollbackCleanup(String storageKey) {
+    private void registerRollbackCleanup(String storageKey, boolean newlyCreated) {
+        if (!newlyCreated) {
+            return;
+        }
         requireTransactionSynchronization();
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCompletion(int status) {
                 if (status != STATUS_COMMITTED) {
-                    deleteQuietly(storageKey, "rolled-back upload");
+                    cleanupService.deleteBinaryIfUnreferenced(storageKey, "rolled-back upload");
                 }
             }
         });
@@ -148,8 +168,10 @@ public class StoredFileService {
         requireTransactionSynchronization();
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
-            public void afterCommit() {
-                deleteQuietly(storageKey, "committed deletion");
+            public void afterCompletion(int status) {
+                if (status == STATUS_COMMITTED) {
+                    cleanupService.deleteBinaryIfUnreferenced(storageKey, "committed deletion");
+                }
             }
         });
     }
@@ -161,11 +183,4 @@ public class StoredFileService {
         }
     }
 
-    private void deleteQuietly(String storageKey, String operation) {
-        try {
-            storage.delete(storageKey);
-        } catch (RuntimeException ex) {
-            log.error("Could not clean file content after {}", operation, ex);
-        }
-    }
 }

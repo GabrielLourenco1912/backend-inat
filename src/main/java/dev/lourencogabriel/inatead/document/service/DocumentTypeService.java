@@ -1,9 +1,13 @@
 package dev.lourencogabriel.inatead.document.service;
 
+import dev.lourencogabriel.inatead.contract.repository.ContractDocumentRepository;
 import dev.lourencogabriel.inatead.document.dto.DocumentTypeDtos;
 import dev.lourencogabriel.inatead.document.model.DocumentType;
+import dev.lourencogabriel.inatead.document.model.DocumentTypeScope;
 import dev.lourencogabriel.inatead.document.repository.DocumentTypeRepository;
+import dev.lourencogabriel.inatead.document.repository.PersonDocumentRepository;
 import dev.lourencogabriel.inatead.shared.api.PageResponse;
+import dev.lourencogabriel.inatead.web.exception.BusinessRuleException;
 import dev.lourencogabriel.inatead.web.exception.ResourceConflictException;
 import dev.lourencogabriel.inatead.web.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +22,8 @@ import java.util.Locale;
 public class DocumentTypeService {
 
     private final DocumentTypeRepository repository;
+    private final PersonDocumentRepository personDocumentRepository;
+    private final ContractDocumentRepository contractDocumentRepository;
 
     @Transactional
     public DocumentTypeDtos.Response create(DocumentTypeDtos.Request request) {
@@ -56,6 +62,9 @@ public class DocumentTypeService {
         if (duplicate) {
             throw new ResourceConflictException("A document type with this code already exists");
         }
+        if (!creating) {
+            validateScopeChange(entity, request.scope());
+        }
         entity.setCode(code);
         entity.setName(request.name().trim());
         entity.setDescription(
@@ -63,6 +72,25 @@ public class DocumentTypeService {
                         ? null
                         : request.description().trim()
         );
+        entity.setScope(request.scope());
+    }
+
+    private void validateScopeChange(
+            DocumentType entity,
+            DocumentTypeScope newScope
+    ) {
+        if (!newScope.supportsPersonDocument()
+                && personDocumentRepository.existsByDocumentType_Id(entity.getId())) {
+            throw new BusinessRuleException(
+                    "Document type scope cannot exclude person documents while it is in use"
+            );
+        }
+        if (!newScope.supportsContractDocument()
+                && contractDocumentRepository.existsByDocumentType_Id(entity.getId())) {
+            throw new BusinessRuleException(
+                    "Document type scope cannot exclude contract documents while it is in use"
+            );
+        }
     }
 
     private DocumentType require(Short id) {
@@ -75,7 +103,8 @@ public class DocumentTypeService {
                 entity.getId(),
                 entity.getCode(),
                 entity.getName(),
-                entity.getDescription()
+                entity.getDescription(),
+                entity.getScope()
         );
     }
 }

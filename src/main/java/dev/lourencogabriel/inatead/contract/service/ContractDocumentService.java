@@ -7,7 +7,9 @@ import dev.lourencogabriel.inatead.contract.repository.ContractRepository;
 import dev.lourencogabriel.inatead.document.repository.DocumentTypeRepository;
 import dev.lourencogabriel.inatead.document.service.StoredFileDownload;
 import dev.lourencogabriel.inatead.document.service.StoredFileService;
+import dev.lourencogabriel.inatead.document.storage.FileUploadPurpose;
 import dev.lourencogabriel.inatead.shared.api.PageResponse;
+import dev.lourencogabriel.inatead.shared.model.ContractStatus;
 import dev.lourencogabriel.inatead.shared.persistence.EntityLookup;
 import dev.lourencogabriel.inatead.web.exception.BusinessRuleException;
 import dev.lourencogabriel.inatead.web.exception.ResourceConflictException;
@@ -18,9 +20,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.EnumSet;
+
 @Service
 @RequiredArgsConstructor
 public class ContractDocumentService {
+
+    private static final EnumSet<ContractStatus> DOCUMENT_EDITABLE_STATUSES = EnumSet.of(
+            ContractStatus.DRAFT,
+            ContractStatus.ACTIVE,
+            ContractStatus.SUSPENDED
+    );
 
     private final ContractDocumentRepository documentRepository;
     private final ContractRepository contractRepository;
@@ -36,7 +46,11 @@ public class ContractDocumentService {
         ContractDocument document = new ContractDocument();
         apply(document, request);
         validate(document, true);
-        document.setFile(storedFileService.store(upload, actorUserId));
+        document.setFile(storedFileService.store(
+                upload,
+                actorUserId,
+                FileUploadPurpose.CONTRACT_DOCUMENT
+        ));
         return toResponse(documentRepository.save(document));
     }
 
@@ -56,6 +70,7 @@ public class ContractDocumentService {
             ContractDocumentDtos.Request request
     ) {
         ContractDocument document = require(id);
+        ensureIdentityIsUnchanged(document, request);
         apply(document, request);
         validate(document, false);
         return toResponse(documentRepository.save(document));
@@ -69,6 +84,11 @@ public class ContractDocumentService {
     @Transactional
     public void delete(String id) {
         ContractDocument document = require(id);
+        if (!DOCUMENT_EDITABLE_STATUSES.contains(document.getContract().getStatus())) {
+            throw new BusinessRuleException(
+                    "Documents cannot be deleted from an ended or cancelled contract"
+            );
+        }
         var file = document.getFile();
         documentRepository.delete(document);
         documentRepository.flush();
@@ -91,6 +111,14 @@ public class ContractDocumentService {
     }
 
     private void validate(ContractDocument document, boolean creating) {
+        if (!DOCUMENT_EDITABLE_STATUSES.contains(document.getContract().getStatus())) {
+            throw new BusinessRuleException(
+                    "Documents cannot be changed for an ended or cancelled contract"
+            );
+        }
+        if (!document.getDocumentType().getScope().supportsContractDocument()) {
+            throw new BusinessRuleException("Document type is not allowed for contract documents");
+        }
         boolean duplicateVersion = creating
                 ? documentRepository.existsByContract_IdAndDocumentType_IdAndVersionNumber(
                         document.getContract().getId(),
@@ -125,6 +153,18 @@ public class ContractDocumentService {
                         "Only one current document is allowed per contract and document type"
                 );
             }
+        }
+    }
+
+    private void ensureIdentityIsUnchanged(
+            ContractDocument document,
+            ContractDocumentDtos.Request request
+    ) {
+        if (!document.getContract().getId().equals(request.contractId())) {
+            throw new BusinessRuleException("contractId cannot be changed");
+        }
+        if (!document.getDocumentType().getId().equals(request.documentTypeId())) {
+            throw new BusinessRuleException("documentTypeId cannot be changed");
         }
     }
 

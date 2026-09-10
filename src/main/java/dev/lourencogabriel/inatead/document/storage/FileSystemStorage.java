@@ -7,18 +7,15 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.HexFormat;
-import java.util.UUID;
+import java.util.function.Consumer;
 
 @Component
 public class FileSystemStorage {
@@ -44,20 +41,35 @@ public class FileSystemStorage {
     }
 
     public StoredBinary store(InputStream input) {
+        return store(input, ignored -> {
+        });
+    }
+
+    public StoredBinary store(InputStream input, Consumer<Path> contentValidator) {
         Path temporaryFile = null;
         try {
             temporaryFile = Files.createTempFile(temporaryDirectory, "upload-", ".tmp");
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             long size = copy(input, temporaryFile, digest);
-            String storageKey = newStorageKey();
+            String checksum = HexFormat.of().formatHex(digest.digest());
+            contentValidator.accept(temporaryFile);
+            String storageKey = newStorageKey(checksum);
             Path destination = resolve(storageKey);
             Files.createDirectories(destination.getParent());
-            moveAtomicallyWhenSupported(temporaryFile, destination);
-            temporaryFile = null;
+            boolean newlyCreated = installDeduplicated(
+                    temporaryFile,
+                    destination,
+                    size,
+                    checksum
+            );
+            if (newlyCreated) {
+                temporaryFile = null;
+            }
             return new StoredBinary(
                     storageKey,
                     size,
-                    HexFormat.of().formatHex(digest.digest())
+                    checksum,
+                    newlyCreated
             );
         } catch (FileTooLargeException ex) {
             throw ex;
@@ -130,13 +142,11 @@ public class FileSystemStorage {
         return total;
     }
 
-    private String newStorageKey() {
-        LocalDate today = LocalDate.now(ZoneOffset.UTC);
-        return "%04d/%02d/%02d/%s".formatted(
-                today.getYear(),
-                today.getMonthValue(),
-                today.getDayOfMonth(),
-                UUID.randomUUID().toString().replace("-", "")
+    private String newStorageKey(String checksum) {
+        return "sha256/%s/%s/%s".formatted(
+                checksum.substring(0, 2),
+                checksum.substring(2, 4),
+                checksum
         );
     }
 
@@ -159,11 +169,52 @@ public class FileSystemStorage {
         }
     }
 
-    private void moveAtomicallyWhenSupported(Path source, Path destination) throws IOException {
+    private boolean installDeduplicated(
+            Path temporaryFile,
+            Path destination,
+            long expectedSize,
+            String expectedChecksum
+    ) throws IOException {
+        if (Files.exists(destination, LinkOption.NOFOLLOW_LINKS)) {
+            validateExistingBinary(destination, expectedSize, expectedChecksum);
+            return false;
+        }
         try {
-            Files.move(source, destination, StandardCopyOption.ATOMIC_MOVE);
-        } catch (AtomicMoveNotSupportedException ex) {
-            Files.move(source, destination);
+            Files.move(temporaryFile, destination);
+            return true;
+        } catch (FileAlreadyExistsException exception) {
+            validateExistingBinary(destination, expectedSize, expectedChecksum);
+            return false;
+        }
+    }
+
+    private void validateExistingBinary(
+            Path destination,
+            long expectedSize,
+            String expectedChecksum
+    ) throws IOException {
+        if (!Files.isRegularFile(destination, LinkOption.NOFOLLOW_LINKS)
+                || Files.size(destination) != expectedSize
+                || !checksum(destination).equals(expectedChecksum)) {
+            throw new FileStorageException(
+                    "Deduplicated file content conflicts with the existing checksum path"
+            );
+        }
+    }
+
+    private String checksum(Path file) throws IOException {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] buffer = new byte[BUFFER_SIZE];
+            try (InputStream input = Files.newInputStream(file)) {
+                int bytesRead;
+                while ((bytesRead = input.read(buffer)) != -1) {
+                    digest.update(buffer, 0, bytesRead);
+                }
+            }
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (NoSuchAlgorithmException exception) {
+            throw new FileStorageException("SHA-256 is not available", exception);
         }
     }
 

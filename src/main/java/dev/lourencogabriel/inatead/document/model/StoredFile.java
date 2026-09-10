@@ -9,7 +9,6 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -17,8 +16,11 @@ import lombok.Setter;
 @Entity
 @Table(
         name = "files",
-        indexes = @Index(name = "idx_files_uploaded_by_user", columnList = "uploaded_by_user_id"),
-        uniqueConstraints = @UniqueConstraint(name = "uk_files_storage_key", columnNames = "storage_key")
+        indexes = {
+                @Index(name = "idx_files_uploaded_by_user", columnList = "uploaded_by_user_id"),
+                @Index(name = "idx_files_storage_key", columnList = "storage_key"),
+                @Index(name = "idx_files_checksum_sha256", columnList = "checksum_sha256")
+        }
 )
 @Getter
 @Setter

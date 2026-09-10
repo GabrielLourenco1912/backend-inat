@@ -8,6 +8,7 @@ import dev.lourencogabriel.inatead.activity.repository.ActivitySubmissionReposit
 import dev.lourencogabriel.inatead.activity.repository.SubmissionFileRepository;
 import dev.lourencogabriel.inatead.document.service.StoredFileDownload;
 import dev.lourencogabriel.inatead.document.service.StoredFileService;
+import dev.lourencogabriel.inatead.document.storage.FileUploadPurpose;
 import dev.lourencogabriel.inatead.shared.model.LessonStatus;
 import dev.lourencogabriel.inatead.shared.persistence.EntityLookup;
 import dev.lourencogabriel.inatead.web.exception.BusinessRuleException;
@@ -39,7 +40,11 @@ public class SubmissionFileService {
                 "Activity submission"
         );
         ensureLessonAcceptsSubmissionChanges(submission);
-        var file = storedFileService.store(upload, actorUserId);
+        var file = storedFileService.store(
+                upload,
+                actorUserId,
+                FileUploadPurpose.SUBMISSION_ATTACHMENT
+        );
         SubmissionFileId id = new SubmissionFileId(submissionId, file.getId());
         SubmissionFile link = new SubmissionFile();
         link.setId(id);
@@ -82,7 +87,13 @@ public class SubmissionFileService {
     }
 
     private void ensureLessonAcceptsSubmissionChanges(ActivitySubmission submission) {
-        if (submission.getActivity().getLesson().getStatus() == LessonStatus.CANCELLED) {
+        LessonStatus lessonStatus = submission.getActivity().getLesson().getStatus();
+        if (lessonStatus == LessonStatus.SCHEDULED) {
+            throw new BusinessRuleException(
+                    "Activities from scheduled lessons cannot receive submissions"
+            );
+        }
+        if (lessonStatus == LessonStatus.CANCELLED) {
             throw new BusinessRuleException("Submission files are blocked for a cancelled lesson");
         }
     }

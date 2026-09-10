@@ -7,6 +7,7 @@ import dev.lourencogabriel.inatead.activity.repository.ActivityFileRepository;
 import dev.lourencogabriel.inatead.activity.repository.ActivityRepository;
 import dev.lourencogabriel.inatead.document.service.StoredFileDownload;
 import dev.lourencogabriel.inatead.document.service.StoredFileService;
+import dev.lourencogabriel.inatead.document.storage.FileUploadPurpose;
 import dev.lourencogabriel.inatead.shared.persistence.EntityLookup;
 import dev.lourencogabriel.inatead.web.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -32,7 +33,11 @@ public class ActivityFileService {
             String actorUserId
     ) {
         var activity = EntityLookup.require(activityRepository, activityId, "Activity");
-        var file = storedFileService.store(upload, actorUserId);
+        var file = storedFileService.store(
+                upload,
+                actorUserId,
+                FileUploadPurpose.ACTIVITY_MATERIAL
+        );
         ActivityFileId id = new ActivityFileId(activityId, file.getId());
         ActivityFile link = new ActivityFile();
         link.setId(id);
