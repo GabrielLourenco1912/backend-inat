@@ -1,6 +1,8 @@
 package dev.lourencogabriel.inatead.web.exception;
 
 import dev.lourencogabriel.inatead.auth.exception.InvalidAuthChallengeException;
+import dev.lourencogabriel.inatead.auth.exception.PasswordResetUnavailableException;
+import dev.lourencogabriel.inatead.document.storage.FileScanUnavailableException;
 import dev.lourencogabriel.inatead.document.storage.FileStorageException;
 import dev.lourencogabriel.inatead.document.storage.FileTooLargeException;
 import dev.lourencogabriel.inatead.mail.EmailDeliveryException;
@@ -68,6 +70,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(FileStorageException.class)
     public ResponseEntity<ApiResponse<Object>> handleFileStorage(FileStorageException ex) {
         return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "File storage operation failed");
+    }
+
+    @ExceptionHandler(FileScanUnavailableException.class)
+    public ResponseEntity<ApiResponse<Object>> handleFileScanUnavailable(
+            FileScanUnavailableException ex
+    ) {
+        return buildResponse(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage());
     }
 
     @ExceptionHandler(EmailDeliveryException.class)
@@ -149,6 +158,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidAuthChallengeException.class)
     public ResponseEntity<ApiResponse<Object>> handleInvalidAuthChallenge(
             InvalidAuthChallengeException ex
+    ) {
+        return buildResponse(HttpStatus.UNAUTHORIZED, ex.getMessage());
+    }
+
+    @ExceptionHandler(PasswordResetUnavailableException.class)
+    public ResponseEntity<ApiResponse<Object>> handlePasswordResetUnavailable(
+            PasswordResetUnavailableException ex
     ) {
         return buildResponse(HttpStatus.UNAUTHORIZED, ex.getMessage());
     }

@@ -53,6 +53,11 @@ api:
       enabled: ${ACADEMIC_LIFECYCLE_ENABLED:true}
       interval: ${ACADEMIC_LIFECYCLE_INTERVAL:60000}
       reminder-batch-size: ${ACADEMIC_REMINDER_BATCH_SIZE:200}
+  document:
+    lifecycle:
+      enabled: ${DOCUMENT_LIFECYCLE_ENABLED:true}
+      interval: ${DOCUMENT_LIFECYCLE_INTERVAL:60000}
+      batch-size: ${DOCUMENT_LIFECYCLE_BATCH_SIZE:200}
   notification:
     email:
       enabled: ${NOTIFICATION_EMAIL_ENABLED:true}
@@ -62,6 +67,16 @@ api:
     filesystem:
       root: ${FILE_STORAGE_ROOT:./data/files}
       max-size: ${FILE_STORAGE_MAX_SIZE:25MB}
+    validation:
+      document-extensions: ${FILE_ALLOWED_DOCUMENT_EXTENSIONS:pdf,png,jpg,jpeg,webp}
+      activity-extensions: ${FILE_ALLOWED_ACTIVITY_EXTENSIONS:pdf,png,jpg,jpeg,webp,gif,txt,csv,rtf,docx,xlsx,pptx,odt,ods,odp,mp3,mp4,webm,wav}
+      submission-extensions: ${FILE_ALLOWED_SUBMISSION_EXTENSIONS:pdf,png,jpg,jpeg,webp,gif,txt,csv,rtf,docx,xlsx,pptx,odt,ods,odp,mp3,mp4,webm,wav}
+    antivirus:
+      enabled: ${FILE_ANTIVIRUS_ENABLED:false}
+      host: ${CLAMAV_HOST:localhost}
+      port: ${CLAMAV_PORT:3310}
+      connect-timeout: ${CLAMAV_CONNECT_TIMEOUT:3s}
+      read-timeout: ${CLAMAV_READ_TIMEOUT:30s}
   security:
     jwt:
       secret: ${API_SECURITY_JWT_SECRET}
@@ -71,3 +86,8 @@ api:
     challenge:
       ttl: ${AUTH_CHALLENGE_TTL:10m}
       max-attempts: ${AUTH_CHALLENGE_MAX_ATTEMPTS:5}
+    account-lock:
+      max-failed-attempts: ${AUTH_ACCOUNT_LOCK_MAX_FAILED_ATTEMPTS:5}
+      duration: ${AUTH_ACCOUNT_LOCK_DURATION:15m}
+      scheduler-enabled: ${AUTH_ACCOUNT_LOCK_SCHEDULER_ENABLED:true}
+      unlock-interval: ${AUTH_ACCOUNT_UNLOCK_INTERVAL:60000}
