@@ -1,8 +1,10 @@
 package dev.lourencogabriel.inatead.auth.repository;
 
 import dev.lourencogabriel.inatead.auth.model.AuthChallenge;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -13,6 +15,7 @@ import java.util.Optional;
 public interface AuthChallengeRepository extends JpaRepository<AuthChallenge, String> {
 
     @EntityGraph(attributePaths = "user")
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<AuthChallenge> findWithUserById(String id);
 
     @Modifying(flushAutomatically = true)

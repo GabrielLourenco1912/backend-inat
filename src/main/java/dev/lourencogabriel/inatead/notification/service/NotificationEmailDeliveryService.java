@@ -7,6 +7,7 @@ import dev.lourencogabriel.inatead.notification.model.NotificationRecipient;
 import dev.lourencogabriel.inatead.notification.repository.NotificationRecipientRepository;
 import dev.lourencogabriel.inatead.shared.model.NotificationChannel;
 import dev.lourencogabriel.inatead.shared.model.NotificationDeliveryStatus;
+import dev.lourencogabriel.inatead.shared.model.UserAccountStatus;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,6 +35,14 @@ public class NotificationEmailDeliveryService {
                 .findByIdForDelivery(recipientId)
                 .orElse(null);
         if (!isEligible(recipient)) {
+            return;
+        }
+        if (recipient.getRecipientUser().getStatus() != UserAccountStatus.ACTIVE) {
+            recipient.setDeliveryStatus(NotificationDeliveryStatus.CANCELLED);
+            recipient.setFailureReason(
+                    "Email delivery cancelled because the recipient account is not active"
+            );
+            this.recipientRepository.save(recipient);
             return;
         }
 

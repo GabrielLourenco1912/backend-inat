@@ -3,6 +3,7 @@ package dev.lourencogabriel.inatead.auth.config;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import com.nimbusds.jose.proc.SecurityContext;
 import dev.lourencogabriel.inatead.auth.http.ApiAuthenticationEntryPoint;
+import dev.lourencogabriel.inatead.auth.security.ActiveUserJwtValidator;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -17,8 +18,10 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -36,20 +39,23 @@ public class SecurityConfig {
 
     private final SecretKey secretKey;
     private final ApiAuthenticationEntryPoint authenticationEntryPoint;
+    private final String issuer;
 
     public SecurityConfig(
             @Value("${api.security.jwt.secret}") String jwtSecret,
+            @Value("${api.security.jwt.issuer}") String issuer,
             ApiAuthenticationEntryPoint authenticationEntryPoint
     ) {
         this.secretKey = new SecretKeySpec(
                 jwtSecret.getBytes(StandardCharsets.UTF_8),
                 "HmacSHA256"
         );
+        this.issuer = issuer;
         this.authenticationEntryPoint = authenticationEntryPoint;
     }
 
     @Bean
-    SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    SecurityFilterChain filterChain(HttpSecurity http, JwtDecoder jwtDecoder) throws Exception {
         http
             .csrf(AbstractHttpConfigurer::disable)
 
@@ -61,6 +67,8 @@ public class SecurityConfig {
                     .requestMatchers(
                             "/api/auth/login",
                             "/api/auth/register",
+                            "/api/auth/forgot-password",
+                            "/api/auth/reset-password",
                             "/api/auth/challenge/verify",
                             "/api/auth/refresh",
                             "/api/auth/logout"
@@ -69,7 +77,7 @@ public class SecurityConfig {
             )
 
             .oauth2ResourceServer(oauth2 -> oauth2
-                    .jwt(jwt -> jwt.decoder(jwtDecoder()))
+                    .jwt(jwt -> jwt.decoder(jwtDecoder))
                     .authenticationEntryPoint(this.authenticationEntryPoint)
             )
 
@@ -109,8 +117,13 @@ public class SecurityConfig {
     }
 
     @Bean
-    JwtDecoder jwtDecoder() {
-        return NimbusJwtDecoder.withSecretKey(this.secretKey).build();
+    JwtDecoder jwtDecoder(ActiveUserJwtValidator activeUserJwtValidator) {
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(this.secretKey).build();
+        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
+                JwtValidators.createDefaultWithIssuer(this.issuer),
+                activeUserJwtValidator
+        ));
+        return decoder;
     }
 
     @Bean

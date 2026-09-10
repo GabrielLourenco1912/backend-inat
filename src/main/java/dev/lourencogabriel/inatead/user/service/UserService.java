@@ -2,7 +2,9 @@ package dev.lourencogabriel.inatead.user.service;
 
 import dev.lourencogabriel.inatead.person.model.Person;
 import dev.lourencogabriel.inatead.person.repository.PersonRepository;
+import dev.lourencogabriel.inatead.auth.service.AccountSecurityService;
 import dev.lourencogabriel.inatead.shared.api.PageResponse;
+import dev.lourencogabriel.inatead.shared.model.RecordStatus;
 import dev.lourencogabriel.inatead.shared.persistence.EntityLookup;
 import dev.lourencogabriel.inatead.user.dto.UserDtos;
 import dev.lourencogabriel.inatead.user.dto.UserResponse;
@@ -34,16 +36,18 @@ public class UserService {
     private final PersonRepository personRepository;
     private final PasswordEncoder passwordEncoder;
     private final UserRoleRepository userRoleRepository;
+    private final AccountSecurityService accountSecurityService;
 
     @Transactional
     public UserResponse create(UserDtos.CreateRequest request) {
         String email = normalizeEmail(request.loginEmail());
         ensureEmailAvailable(email, null);
-        Person person = resolvePerson(request.personId(), null);
+        Person person = resolvePerson(request.personId());
+        ensurePersonIsActive(person);
 
         User user = new User(request.displayName().trim(), email, passwordEncoder.encode(request.password()));
         user.setPerson(person);
-        user.setStatus(request.status());
+        this.accountSecurityService.applyAdministrativeUpdate(user, request.status(), false);
         return toResponse(userRepository.save(user));
     }
 
@@ -59,7 +63,7 @@ public class UserService {
 
     @Transactional
     public UserResponse update(String id, UserDtos.UpdateRequest request) {
-        User user = require(id);
+        User user = requireForUpdate(id);
         if (user.getStatus() == UserAccountStatus.ACTIVE
                 && request.status() != UserAccountStatus.ACTIVE
                 && hasRole(user, "ADMIN")
@@ -69,23 +73,27 @@ public class UserService {
         String email = normalizeEmail(request.loginEmail());
         ensureEmailAvailable(email, id);
         boolean emailChanged = !user.getEmail().equalsIgnoreCase(email);
+        boolean passwordChanged = request.password() != null && !request.password().isBlank();
 
-        user.setPerson(resolvePerson(request.personId(), id));
         user.setName(request.displayName().trim());
         user.setEmail(email);
-        user.setStatus(request.status());
+        if (passwordChanged) {
+            user.setPassword(passwordEncoder.encode(request.password()));
+        }
         if (emailChanged) {
             user.setEmailVerifiedAt(null);
         }
-        if (request.password() != null && !request.password().isBlank()) {
-            user.setPassword(passwordEncoder.encode(request.password()));
-        }
+        this.accountSecurityService.applyAdministrativeUpdate(
+                user,
+                request.status(),
+                emailChanged || passwordChanged
+        );
         return toResponse(userRepository.save(user));
     }
 
     @Transactional
     public void delete(String id) {
-        User user = require(id);
+        User user = requireForUpdate(id);
         if (user.getStatus() == UserAccountStatus.ACTIVE
                 && hasRole(user, "ADMIN")
                 && userRoleRepository.countActiveUsersByRoleCode("ADMIN") <= 1) {
@@ -99,6 +107,11 @@ public class UserService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", id));
     }
 
+    private User requireForUpdate(String id) {
+        return userRepository.findWithRolesByUlidForUpdate(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User", id));
+    }
+
     private void ensureEmailAvailable(String email, String currentId) {
         boolean duplicate = currentId == null
                 ? userRepository.existsByEmail(email)
@@ -108,17 +121,20 @@ public class UserService {
         }
     }
 
-    private Person resolvePerson(String personId, String currentUserId) {
+    private Person resolvePerson(String personId) {
         if (personId == null || personId.isBlank()) {
             throw new BusinessRuleException("A user must be linked to a person");
         }
-        boolean alreadyLinked = currentUserId == null
-                ? userRepository.existsByPerson_Id(personId)
-                : userRepository.existsByPerson_IdAndUlidNot(personId, currentUserId);
-        if (alreadyLinked) {
+        if (userRepository.existsByPerson_Id(personId)) {
             throw new PersonAlreadyLinkedToUserException();
         }
         return EntityLookup.require(personRepository, personId, "Person");
+    }
+
+    private void ensurePersonIsActive(Person person) {
+        if (person.getStatus() != RecordStatus.ACTIVE) {
+            throw new BusinessRuleException("A user account requires an active person");
+        }
     }
 
     private UserResponse toResponse(User user) {
@@ -138,6 +154,7 @@ public class UserService {
                 user.getStatus(),
                 roles,
                 user.getEmailVerifiedAt(),
+                user.getLockedUntil(),
                 user.getLastLoginAt(),
                 user.getCreatedAt(),
                 user.getUpdatedAt()

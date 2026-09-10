@@ -13,6 +13,7 @@ public record UserResponse(
         UserAccountStatus status,
         Set<String> roles,
         Instant emailVerifiedAt,
+        Instant lockedUntil,
         Instant lastLoginAt,
         Instant createdAt,
         Instant updatedAt

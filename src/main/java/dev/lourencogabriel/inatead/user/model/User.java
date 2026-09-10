@@ -57,12 +57,25 @@ public class User implements UserDetails {
 
     @NotNull
     @OneToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "person_id", nullable = false)
+    @JoinColumn(name = "person_id", nullable = false, updatable = false)
     private Person person;
 
     @Enumerated(EnumType.STRING)
     @Column(length = 20, nullable = false)
     private UserAccountStatus status = UserAccountStatus.ACTIVE;
+
+    @Column(name = "failed_authentication_attempts")
+    private Integer failedAuthenticationAttempts = 0;
+
+    @Column(name = "locked_until")
+    private Instant lockedUntil;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status_before_lock", length = 20)
+    private UserAccountStatus statusBeforeLock;
+
+    @Column(name = "token_version")
+    private Long tokenVersion = 0L;
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<UserRole> userRoles = new HashSet<>();
@@ -128,6 +141,12 @@ public class User implements UserDetails {
     private void initAttributes() {
         if (this.status == null) {
             this.status = UserAccountStatus.ACTIVE;
+        }
+        if (this.failedAuthenticationAttempts == null) {
+            this.failedAuthenticationAttempts = 0;
+        }
+        if (this.tokenVersion == null) {
+            this.tokenVersion = 0L;
         }
         this.updatedAt = Instant.now();
     }

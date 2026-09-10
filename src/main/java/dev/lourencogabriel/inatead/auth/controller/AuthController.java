@@ -2,9 +2,11 @@ package dev.lourencogabriel.inatead.auth.controller;
 
 import dev.lourencogabriel.inatead.auth.dto.AuthResponse;
 import dev.lourencogabriel.inatead.auth.dto.AuthChallengeResponse;
+import dev.lourencogabriel.inatead.auth.dto.ForgotPasswordRequest;
 import dev.lourencogabriel.inatead.auth.dto.LoginRequest;
 import dev.lourencogabriel.inatead.auth.dto.RefreshRequest;
 import dev.lourencogabriel.inatead.auth.dto.RegisterRequest;
+import dev.lourencogabriel.inatead.auth.dto.ResetPasswordRequest;
 import dev.lourencogabriel.inatead.auth.dto.VerifyAuthChallengeRequest;
 import dev.lourencogabriel.inatead.auth.http.AuthRequestContext;
 import dev.lourencogabriel.inatead.auth.http.AuthRequestResolver;
@@ -73,6 +75,43 @@ public class AuthController {
                 challenge,
                 "Registration created; verification code sent",
                 HttpStatus.CREATED
+        ));
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<ApiResponse<?>> forgotPassword(
+            @Valid @RequestBody ForgotPasswordRequest forgotPasswordRequest,
+            @RequestHeader(value = CLIENT_TYPE_HEADER, required = false) String clientTypeHeader,
+            HttpServletRequest request
+    ) {
+        AuthRequestContext requestContext = this.requestResolver.resolve(clientTypeHeader, request);
+        AuthChallengeResponse challenge = this.authService.requestPasswordReset(
+                forgotPasswordRequest.email(),
+                requestContext.userAgent(),
+                requestContext.ipAddress()
+        );
+
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(
+                challenge,
+                "Password reset code sent",
+                HttpStatus.ACCEPTED
+        ));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<ApiResponse<?>> resetPassword(
+            @Valid @RequestBody ResetPasswordRequest resetPasswordRequest
+    ) {
+        this.authService.resetPassword(
+                resetPasswordRequest.challengeId(),
+                resetPasswordRequest.code(),
+                resetPasswordRequest.newPassword()
+        );
+
+        return ResponseEntity.ok(new ApiResponse<>(
+                null,
+                "Password reset successfully",
+                HttpStatus.OK
         ));
     }
 

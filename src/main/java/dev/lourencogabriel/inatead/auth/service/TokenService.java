@@ -23,6 +23,8 @@ import java.util.Base64;
 @Service
 public class TokenService {
 
+    public static final String TOKEN_VERSION_CLAIM = "token_version";
+
     private static final int ACCESS_TOKEN_MINUTES = 15;
     private static final int REFRESH_TOKEN_DAYS = 30;
     private static final int REFRESH_TOKEN_BYTES = 32;
@@ -73,6 +75,7 @@ public class TokenService {
                 .issuedAt(now)
                 .expiresAt(expiration)
                 .subject(subject)
+                .claim(TOKEN_VERSION_CLAIM, valueOrZero(user.getTokenVersion()))
                 .build();
 
         JwsHeader jwsHeader = JwsHeader.with(() -> "HS256").build();
@@ -216,6 +219,10 @@ public class TokenService {
         }
 
         return normalizedValue.substring(0, maxLength);
+    }
+
+    private static long valueOrZero(Long value) {
+        return value == null ? 0L : value;
     }
 
     private record RefreshTokenValue(String token, String hash) {

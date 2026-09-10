@@ -24,7 +24,6 @@ public final class UserDtos {
     }
 
     public record UpdateRequest(
-            @NotBlank String personId,
             @NotBlank @Size(max = 150) String displayName,
             @NotBlank @Email @Size(max = 254) String loginEmail,
             @Size(min = 8)

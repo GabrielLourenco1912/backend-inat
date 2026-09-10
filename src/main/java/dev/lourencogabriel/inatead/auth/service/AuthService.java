@@ -4,9 +4,12 @@ import dev.lourencogabriel.inatead.auth.dto.AuthResponse;
 import dev.lourencogabriel.inatead.auth.dto.AuthChallengeResponse;
 import dev.lourencogabriel.inatead.auth.dto.RegisterRequest;
 import dev.lourencogabriel.inatead.auth.exception.InvalidAuthChallengeException;
+import dev.lourencogabriel.inatead.auth.exception.PasswordResetUnavailableException;
 import dev.lourencogabriel.inatead.auth.model.AuthChallengePurpose;
 import dev.lourencogabriel.inatead.person.model.Person;
 import dev.lourencogabriel.inatead.person.repository.PersonRepository;
+import dev.lourencogabriel.inatead.shared.model.RecordStatus;
+import dev.lourencogabriel.inatead.web.exception.BusinessRuleException;
 import dev.lourencogabriel.inatead.user.exception.EmailAlreadyInUseException;
 import dev.lourencogabriel.inatead.user.exception.PersonAlreadyLinkedToUserException;
 import dev.lourencogabriel.inatead.user.exception.PersonNotFoundForRegistrationException;
@@ -17,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.stereotype.Service;
@@ -35,6 +39,7 @@ public class AuthService {
     private final AuthenticationManager authManager;
     private final TokenService tokenService;
     private final AuthChallengeService challengeService;
+    private final AccountSecurityService accountSecurityService;
 
     @Transactional
     public AuthChallengeResponse authenticate(String email, String password) {
@@ -48,7 +53,16 @@ public class AuthService {
             String userAgent,
             String ipAddress
     ) {
-        User currentUser = this.authenticateUser(this.normalizeEmail(email), password);
+        String normalizedEmail = this.normalizeEmail(email);
+        this.accountSecurityService.unlockExpiredByEmail(normalizedEmail);
+
+        User currentUser;
+        try {
+            currentUser = this.authenticateUser(normalizedEmail, password);
+        } catch (AuthenticationException exception) {
+            this.accountSecurityService.recordFailedAuthentication(normalizedEmail);
+            throw exception;
+        }
         AuthChallengePurpose purpose = currentUser.getEmailVerifiedAt() == null
                 ? AuthChallengePurpose.EMAIL_VERIFICATION
                 : AuthChallengePurpose.MFA_LOGIN;
@@ -69,6 +83,7 @@ public class AuthService {
         String email = this.normalizeEmail(registerRequest.email());
         this.ensureEmailIsAvailable(email);
         Person person = this.resolvePersonForRegistration(email);
+        this.ensurePersonIsActive(person);
         this.ensurePersonIsAvailable(person);
 
         User newUser = this.buildUser(registerRequest, email, person);
@@ -79,6 +94,37 @@ public class AuthService {
                 AuthChallengePurpose.EMAIL_VERIFICATION,
                 userAgent,
                 ipAddress
+        );
+    }
+
+    @Transactional
+    public AuthChallengeResponse requestPasswordReset(
+            String email,
+            String userAgent,
+            String ipAddress
+    ) {
+        String normalizedEmail = this.normalizeEmail(email);
+        this.accountSecurityService.unlockExpiredByEmail(normalizedEmail);
+        User user = this.userRepository.findByEmailForUpdate(normalizedEmail)
+                .filter(this::canResetPassword)
+                .orElseThrow(PasswordResetUnavailableException::new);
+
+        return this.challengeService.issue(
+                user,
+                AuthChallengePurpose.PASSWORD_RESET,
+                userAgent,
+                ipAddress
+        );
+    }
+
+    @Transactional(noRollbackFor = InvalidAuthChallengeException.class)
+    public void resetPassword(String challengeId, String code, String newPassword) {
+        User user = this.challengeService.verifyPasswordReset(challengeId, code);
+        user.setPassword(this.passwordEncoder.encode(newPassword));
+        this.accountSecurityService.applyAdministrativeUpdate(
+                user,
+                user.getStatus(),
+                true
         );
     }
 
@@ -144,6 +190,19 @@ public class AuthService {
         if (this.userRepository.existsByPerson_Id(person.getId())) {
             throw new PersonAlreadyLinkedToUserException();
         }
+    }
+
+    private void ensurePersonIsActive(Person person) {
+        if (person.getStatus() != RecordStatus.ACTIVE) {
+            throw new BusinessRuleException(
+                    "User registration requires an active person"
+            );
+        }
+    }
+
+    private boolean canResetPassword(User user) {
+        return user.getStatus() == UserAccountStatus.ACTIVE
+                || user.getStatus() == UserAccountStatus.INVITED;
     }
 
     private String normalizeEmail(String email) {

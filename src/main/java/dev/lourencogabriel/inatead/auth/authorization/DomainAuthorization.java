@@ -17,6 +17,7 @@ import dev.lourencogabriel.inatead.organization.repository.OrganizationRepositor
 import dev.lourencogabriel.inatead.shared.model.ActivityStatus;
 import dev.lourencogabriel.inatead.shared.model.OrganizationType;
 import dev.lourencogabriel.inatead.shared.model.SubmissionStatus;
+import dev.lourencogabriel.inatead.shared.model.UserAccountStatus;
 import dev.lourencogabriel.inatead.user.model.User;
 import dev.lourencogabriel.inatead.user.model.UserRole;
 import dev.lourencogabriel.inatead.user.model.SystemRoleCode;
@@ -59,20 +60,8 @@ public class DomainAuthorization {
         if (accepted.isEmpty()) {
             return false;
         }
-        boolean authorityMatch = authentication.getAuthorities().stream()
-                .map(authority -> authority.getAuthority().replaceFirst("^ROLE_", ""))
-                .anyMatch(accepted::contains);
-        if (authorityMatch) {
-            return true;
-        }
-
-        String userId = userId(authentication);
-        if (userId == null) {
-            return false;
-        }
-        return userRepository.findWithRolesByUlid(userId)
-                .map(user -> roleCodes(user).stream().anyMatch(accepted::contains))
-                .orElse(false);
+        User user = currentUser(authentication);
+        return user != null && roleCodes(user).stream().anyMatch(accepted::contains);
     }
 
     public boolean isSelfOrHasAnyRole(
@@ -80,8 +69,17 @@ public class DomainAuthorization {
             String userId,
             String... acceptedRoles
     ) {
-        return (userId != null && userId.equals(userId(authentication)))
-                || hasAnyRole(authentication, acceptedRoles);
+        User user = currentUser(authentication);
+        if (user == null) {
+            return false;
+        }
+        if (userId != null && userId.equals(user.getUlid())) {
+            return true;
+        }
+        Set<String> accepted = Arrays.stream(acceptedRoles)
+                .filter(SystemRoleCode::isSupported)
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        return roleCodes(user).stream().anyMatch(accepted::contains);
     }
 
     @Transactional(readOnly = true)
@@ -374,10 +372,15 @@ public class DomainAuthorization {
     }
 
     private User currentUser(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return null;
+        }
         String id = userId(authentication);
         if (id == null) {
             return null;
         }
-        return userRepository.findWithRolesByUlid(id).orElse(null);
+        return userRepository.findWithRolesByUlid(id)
+                .filter(user -> user.getStatus() == UserAccountStatus.ACTIVE)
+                .orElse(null);
     }
 }

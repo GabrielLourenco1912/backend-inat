@@ -31,6 +31,20 @@ public interface NotificationRecipientRepository
 
     Optional<NotificationRecipient> findByIdAndRecipientUser_Ulid(String id, String userId);
 
+    @Modifying(flushAutomatically = true)
+    @Query("""
+            update NotificationRecipient recipient
+            set recipient.deliveryStatus = dev.lourencogabriel.inatead.shared.model.NotificationDeliveryStatus.CANCELLED,
+                recipient.failureReason = :reason
+            where recipient.recipientUser.ulid = :userId
+              and recipient.channel = dev.lourencogabriel.inatead.shared.model.NotificationChannel.EMAIL
+              and recipient.deliveryStatus = dev.lourencogabriel.inatead.shared.model.NotificationDeliveryStatus.PENDING
+            """)
+    int cancelPendingEmailsForUser(
+            @Param("userId") String userId,
+            @Param("reason") String reason
+    );
+
     @Query("""
             select recipient.id
             from NotificationRecipient recipient

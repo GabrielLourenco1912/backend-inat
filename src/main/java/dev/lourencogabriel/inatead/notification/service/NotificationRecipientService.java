@@ -153,7 +153,7 @@ public class NotificationRecipientService {
                     NotificationDeliveryStatus.DELIVERED,
                     NotificationDeliveryStatus.FAILED
             );
-            case DELIVERED -> EnumSet.noneOf(NotificationDeliveryStatus.class);
+            case DELIVERED, CANCELLED -> EnumSet.noneOf(NotificationDeliveryStatus.class);
             case FAILED -> EnumSet.of(NotificationDeliveryStatus.PENDING);
         };
     }

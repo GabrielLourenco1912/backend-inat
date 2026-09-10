@@ -37,6 +37,7 @@ public class AuthChallengeService {
     private final EmailSender emailSender;
     private final SecretKey secretKey;
     private final Clock clock;
+    private final AccountSecurityService accountSecurityService;
     private final Duration challengeTtl;
     private final int maxAttempts;
     private final SecureRandom secureRandom = new SecureRandom();
@@ -46,6 +47,7 @@ public class AuthChallengeService {
             EmailSender emailSender,
             SecretKey secretKey,
             Clock clock,
+            AccountSecurityService accountSecurityService,
             @Value("${api.security.challenge.ttl:10m}") Duration challengeTtl,
             @Value("${api.security.challenge.max-attempts:5}") int maxAttempts
     ) {
@@ -59,6 +61,7 @@ public class AuthChallengeService {
         this.emailSender = emailSender;
         this.secretKey = secretKey;
         this.clock = clock;
+        this.accountSecurityService = accountSecurityService;
         this.challengeTtl = challengeTtl;
         this.maxAttempts = maxAttempts;
     }
@@ -98,9 +101,48 @@ public class AuthChallengeService {
 
     @Transactional(noRollbackFor = InvalidAuthChallengeException.class)
     public User verify(String challengeId, String code) {
+        Instant now = Instant.now(this.clock);
+        AuthChallenge challenge = this.verifyCode(challengeId, code, now);
+        User user = challenge.getUser();
+
+        if (challenge.getPurpose() == AuthChallengePurpose.EMAIL_VERIFICATION) {
+            if (user.getStatus() != UserAccountStatus.INVITED
+                    && user.getStatus() != UserAccountStatus.ACTIVE) {
+                throw this.consumeAsInvalid(challenge, now);
+            }
+            user.setEmailVerifiedAt(now);
+            if (user.getStatus() == UserAccountStatus.INVITED) {
+                user.setStatus(UserAccountStatus.ACTIVE);
+            }
+        } else if (challenge.getPurpose() == AuthChallengePurpose.MFA_LOGIN) {
+            if (user.getEmailVerifiedAt() == null
+                    || user.getStatus() != UserAccountStatus.ACTIVE) {
+                throw this.consumeAsInvalid(challenge, now);
+            }
+        } else {
+            throw this.consumeAsInvalid(challenge, now);
+        }
+
+        return this.consumeSuccessfully(challenge, now);
+    }
+
+    @Transactional(noRollbackFor = InvalidAuthChallengeException.class)
+    public User verifyPasswordReset(String challengeId, String code) {
+        Instant now = Instant.now(this.clock);
+        AuthChallenge challenge = this.verifyCode(challengeId, code, now);
+        User user = challenge.getUser();
+        if (challenge.getPurpose() != AuthChallengePurpose.PASSWORD_RESET
+                || (user.getStatus() != UserAccountStatus.ACTIVE
+                && user.getStatus() != UserAccountStatus.INVITED)) {
+            throw this.consumeAsInvalid(challenge, now);
+        }
+
+        return this.consumeSuccessfully(challenge, now);
+    }
+
+    private AuthChallenge verifyCode(String challengeId, String code, Instant now) {
         AuthChallenge challenge = this.challengeRepository.findWithUserById(challengeId)
                 .orElseThrow(InvalidAuthChallengeException::new);
-        Instant now = Instant.now(this.clock);
 
         if (challenge.getConsumedAt() != null
                 || !challenge.getExpiresAt().isAfter(now)
@@ -113,44 +155,39 @@ public class AuthChallengeService {
         }
 
         if (!challenge.getTargetEmail().equalsIgnoreCase(challenge.getUser().getEmail())) {
-            challenge.setConsumedAt(now);
-            this.challengeRepository.save(challenge);
-            throw new InvalidAuthChallengeException();
+            throw this.consumeAsInvalid(challenge, now);
         }
 
         byte[] expected = HexFormat.of().parseHex(challenge.getCodeDigest());
         byte[] actual = HexFormat.of().parseHex(this.digest(challenge.getCodeNonce(), code));
         if (!MessageDigest.isEqual(expected, actual)) {
             challenge.setFailedAttempts(challenge.getFailedAttempts() + 1);
-            if (challenge.getFailedAttempts() >= challenge.getMaxAttempts()) {
+            boolean accountLocked = this.accountSecurityService
+                    .recordFailedAuthentication(challenge.getUser());
+            if (accountLocked || challenge.getFailedAttempts() >= challenge.getMaxAttempts()) {
                 challenge.setConsumedAt(now);
             }
             this.challengeRepository.save(challenge);
             throw new InvalidAuthChallengeException();
         }
 
-        User user = challenge.getUser();
-        if (challenge.getPurpose() == AuthChallengePurpose.EMAIL_VERIFICATION) {
-            if (user.getStatus() != UserAccountStatus.INVITED
-                    && user.getStatus() != UserAccountStatus.ACTIVE) {
-                challenge.setConsumedAt(now);
-                this.challengeRepository.save(challenge);
-                throw new InvalidAuthChallengeException();
-            }
-            user.setEmailVerifiedAt(now);
-            if (user.getStatus() == UserAccountStatus.INVITED) {
-                user.setStatus(UserAccountStatus.ACTIVE);
-            }
-        } else if (user.getEmailVerifiedAt() == null
-                || user.getStatus() != UserAccountStatus.ACTIVE) {
-            challenge.setConsumedAt(now);
-            this.challengeRepository.save(challenge);
-            throw new InvalidAuthChallengeException();
-        }
+        return challenge;
+    }
 
+    private User consumeSuccessfully(AuthChallenge challenge, Instant now) {
+        this.accountSecurityService.recordSuccessfulAuthentication(challenge.getUser());
         challenge.setConsumedAt(now);
         this.challengeRepository.save(challenge);
-        return user;
+        return challenge.getUser();
+    }
+
+    private InvalidAuthChallengeException consumeAsInvalid(
+            AuthChallenge challenge,
+            Instant now
+    ) {
+        challenge.setConsumedAt(now);
+        this.challengeRepository.save(challenge);
+        return new InvalidAuthChallengeException();
     }
 
     private String generateCode() {
@@ -175,15 +212,19 @@ public class AuthChallengeService {
     }
 
     private String subject(AuthChallengePurpose purpose) {
-        return purpose == AuthChallengePurpose.EMAIL_VERIFICATION
-                ? "Confirme seu e-mail no INAT EAD"
-                : "Seu código de acesso ao INAT EAD";
+        return switch (purpose) {
+            case EMAIL_VERIFICATION -> "Confirme seu e-mail no INAT EAD";
+            case MFA_LOGIN -> "Seu código de acesso ao INAT EAD";
+            case PASSWORD_RESET -> "Redefina sua senha no INAT EAD";
+        };
     }
 
     private String body(User user, AuthChallengePurpose purpose, String code) {
-        String action = purpose == AuthChallengePurpose.EMAIL_VERIFICATION
-                ? "confirmar seu e-mail"
-                : "concluir seu login";
+        String action = switch (purpose) {
+            case EMAIL_VERIFICATION -> "confirmar seu e-mail";
+            case MFA_LOGIN -> "concluir seu login";
+            case PASSWORD_RESET -> "redefinir sua senha";
+        };
         return """
                 Olá, %s!
 
