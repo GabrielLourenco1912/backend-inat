@@ -1,5 +1,6 @@
 package dev.lourencogabriel.inatead.lesson.service;
 
+import dev.lourencogabriel.inatead.project.ApprenticeshipPolicy;
 import dev.lourencogabriel.inatead.activity.repository.ActivityRepository;
 import dev.lourencogabriel.inatead.cohort.model.CohortEnrollment;
 import dev.lourencogabriel.inatead.cohort.model.Cohort;
@@ -42,6 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -66,6 +68,10 @@ class LessonServiceScheduleConflictTest {
     private ActivityRepository activityRepository;
     @Mock
     private NotificationRepository notificationRepository;
+    @Mock
+    private ApprenticeshipPolicy apprenticeshipPolicy;
+    @Mock
+    private LessonParticipantService participantService;
 
     private LessonService service;
     private Cohort cohort;
@@ -81,7 +87,9 @@ class LessonServiceScheduleConflictTest {
                 participantRepository,
                 activityRepository,
                 notificationRepository,
-                Clock.fixed(STARTS_AT, ZoneId.of("America/Sao_Paulo"))
+                Clock.fixed(STARTS_AT, ZoneId.of("America/Sao_Paulo")),
+                apprenticeshipPolicy,
+                participantService
         );
 
         cohort = new Cohort();
@@ -200,6 +208,77 @@ class LessonServiceScheduleConflictTest {
 
         assertEquals(DeliveryMode.ONLINE, response.deliveryMode());
         assertNull(response.meetingUrl());
+    }
+
+    @Test
+    void shouldAutomaticallyGenerateRosterWhenCreatingAnOnlineLesson() {
+        stubReferences();
+        when(lessonRepository.save(any(Lesson.class))).thenAnswer(invocation -> {
+            Lesson saved = invocation.getArgument(0);
+            saved.setId("online-lesson");
+            return saved;
+        });
+
+        service.create(onlineRequest());
+
+        verify(participantService).generateRegularRoster("online-lesson");
+    }
+
+    @Test
+    void shouldKeepOnsiteRosterGenerationManual() {
+        stubReferences();
+        when(lessonRepository.save(any(Lesson.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.create(request());
+
+        verify(participantService, never()).generateRegularRoster(any());
+    }
+
+    @Test
+    void shouldRejectSwitchingToOnlineWhenAnExistingParticipantIsIneligible() {
+        Lesson lesson = lesson();
+        lesson.setId("lesson");
+        LessonParticipant participant = extraParticipant(lesson);
+        when(lessonRepository.findById("lesson")).thenReturn(Optional.of(lesson));
+        stubReferences();
+        when(participantRepository.findAllByLesson_Id("lesson")).thenReturn(List.of(participant));
+        doThrow(new BusinessRuleException("Online lessons require 30 hours"))
+                .when(apprenticeshipPolicy).validateParticipation(participant, lesson, LocalDate.of(2026, 9, 10));
+
+        assertThrows(BusinessRuleException.class, () -> service.update("lesson", onlineRequest()));
+
+        verify(lessonRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldRevalidateEligibleParticipantsWhenSwitchingToOnline() {
+        Lesson lesson = lesson();
+        lesson.setId("lesson");
+        LessonParticipant participant = extraParticipant(lesson);
+        when(lessonRepository.findById("lesson")).thenReturn(Optional.of(lesson));
+        stubReferences();
+        when(participantRepository.findAllByLesson_Id("lesson")).thenReturn(List.of(participant));
+        when(lessonRepository.save(any(Lesson.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertEquals(DeliveryMode.ONLINE, service.update("lesson", onlineRequest()).deliveryMode());
+
+        verify(apprenticeshipPolicy).validateParticipation(participant, lesson, LocalDate.of(2026, 9, 10));
+    }
+
+    @Test
+    void shouldIgnoreCancelledParticipantsWhenSwitchingToOnline() {
+        Lesson lesson = lesson();
+        lesson.setId("lesson");
+        LessonParticipant participant = extraParticipant(lesson);
+        participant.setStatus(ParticipationStatus.CANCELLED);
+        when(lessonRepository.findById("lesson")).thenReturn(Optional.of(lesson));
+        stubReferences();
+        when(participantRepository.findAllByLesson_Id("lesson")).thenReturn(List.of(participant));
+        when(lessonRepository.save(any(Lesson.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.update("lesson", onlineRequest());
+
+        verify(apprenticeshipPolicy, never()).validateParticipation(any(), any(), any());
     }
 
     @Test
@@ -555,6 +634,24 @@ class LessonServiceScheduleConflictTest {
                 null,
                 LessonStatus.CANCELLED
         );
+    }
+
+    private LessonDtos.Request onlineRequest() {
+        return new LessonDtos.Request("cohort", "instructor", "Online lesson", STARTS_AT, ENDS_AT,
+                DeliveryMode.ONLINE, null, null, null, LessonStatus.SCHEDULED);
+    }
+
+    private LessonParticipant extraParticipant(Lesson lesson) {
+        Learner learner = new Learner();
+        learner.setId("learner");
+        learner.setPerson(new Person());
+        LessonParticipant participant = new LessonParticipant();
+        participant.setLesson(lesson);
+        participant.setLearner(learner);
+        participant.setParticipationType(ParticipationType.EXTRA);
+        participant.setStatus(ParticipationStatus.EXPECTED);
+        participant.setAssignmentReason("Additional lesson");
+        return participant;
     }
 
     private Lesson lesson() {

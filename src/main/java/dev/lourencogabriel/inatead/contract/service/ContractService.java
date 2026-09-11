@@ -1,5 +1,6 @@
 package dev.lourencogabriel.inatead.contract.service;
 
+import dev.lourencogabriel.inatead.project.ApprenticeshipPolicy;
 import dev.lourencogabriel.inatead.cohort.repository.CohortEnrollmentRepository;
 import dev.lourencogabriel.inatead.cohort.service.CohortEnrollmentLifecycleService;
 import dev.lourencogabriel.inatead.contract.dto.ContractDtos;
@@ -45,6 +46,7 @@ public class ContractService extends AbstractCrudService<Contract, ContractDtos.
     private final CohortEnrollmentLifecycleService enrollmentLifecycleService;
     private final LifecycleStatusHistoryService historyService;
     private final Clock clock;
+    private final ApprenticeshipPolicy apprenticeshipPolicy;
 
     public ContractService(
             ContractRepository contractRepository,
@@ -54,7 +56,8 @@ public class ContractService extends AbstractCrudService<Contract, ContractDtos.
             ContractDocumentRepository documentRepository,
             CohortEnrollmentLifecycleService enrollmentLifecycleService,
             LifecycleStatusHistoryService historyService,
-            Clock clock
+            Clock clock,
+            ApprenticeshipPolicy apprenticeshipPolicy
     ) {
         super(contractRepository, "Contract");
         this.contractRepository = contractRepository;
@@ -65,6 +68,7 @@ public class ContractService extends AbstractCrudService<Contract, ContractDtos.
         this.enrollmentLifecycleService = enrollmentLifecycleService;
         this.historyService = historyService;
         this.clock = clock;
+        this.apprenticeshipPolicy = apprenticeshipPolicy;
     }
 
     @Override
@@ -141,6 +145,7 @@ public class ContractService extends AbstractCrudService<Contract, ContractDtos.
         }
         validateStatusTransition(previousStatus, request.status(), request.statusReason());
         validateEndDateChange(contract, previousEndDate, request);
+        apprenticeshipPolicy.validateWorkloadChange(contract, request.weeklyWorkloadMinutes());
 
         contract.setEndDate(effectiveEndDate(contract, previousStatus, request));
         contract.setMonthlySalary(request.monthlySalary());

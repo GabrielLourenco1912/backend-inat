@@ -2,6 +2,7 @@ package dev.lourencogabriel.inatead.lesson.repository;
 
 import dev.lourencogabriel.inatead.lesson.model.LessonParticipant;
 import dev.lourencogabriel.inatead.shared.model.LessonStatus;
+import dev.lourencogabriel.inatead.shared.model.DeliveryMode;
 import dev.lourencogabriel.inatead.shared.model.ParticipationStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -20,6 +21,13 @@ public interface LessonParticipantRepository extends JpaRepository<LessonPartici
     boolean existsByLesson_IdAndLearner_Id(String lessonId, String learnerId);
 
     boolean existsByLesson_Id(String lessonId);
+
+    List<LessonParticipant> findAllByLearner_IdAndStatusAndLesson_DeliveryModeAndLesson_StatusIn(
+            String learnerId,
+            ParticipationStatus status,
+            DeliveryMode deliveryMode,
+            Collection<LessonStatus> lessonStatuses
+    );
 
     @EntityGraph(attributePaths = {"learner", "sourceEnrollment"})
     List<LessonParticipant> findAllByLesson_Id(String lessonId);

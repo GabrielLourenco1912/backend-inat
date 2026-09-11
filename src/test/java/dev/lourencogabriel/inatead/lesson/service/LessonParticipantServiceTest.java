@@ -1,5 +1,6 @@
 package dev.lourencogabriel.inatead.lesson.service;
 
+import dev.lourencogabriel.inatead.project.ApprenticeshipPolicy;
 import dev.lourencogabriel.inatead.cohort.model.Cohort;
 import dev.lourencogabriel.inatead.cohort.model.CohortEnrollment;
 import dev.lourencogabriel.inatead.cohort.repository.CohortEnrollmentRepository;
@@ -54,6 +55,8 @@ class LessonParticipantServiceTest {
     private CohortEnrollmentRepository enrollmentRepository;
     @Mock
     private UserRepository userRepository;
+    @Mock
+    private ApprenticeshipPolicy apprenticeshipPolicy;
 
     private LessonParticipantService service;
     private LessonParticipant source;
@@ -72,7 +75,8 @@ class LessonParticipantServiceTest {
                 Clock.fixed(
                         Instant.parse("2026-08-20T12:00:00Z"),
                         ZoneId.of("America/Sao_Paulo")
-                )
+                ),
+                apprenticeshipPolicy
         );
 
         learner = new Learner();

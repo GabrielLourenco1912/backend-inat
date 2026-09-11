@@ -1,5 +1,6 @@
 package dev.lourencogabriel.inatead.lesson.service;
 
+import dev.lourencogabriel.inatead.project.ApprenticeshipPolicy;
 import dev.lourencogabriel.inatead.cohort.model.CohortEnrollment;
 import dev.lourencogabriel.inatead.cohort.repository.CohortEnrollmentRepository;
 import dev.lourencogabriel.inatead.learner.repository.LearnerRepository;
@@ -40,6 +41,7 @@ public class LessonParticipantService {
     private final CohortEnrollmentRepository enrollmentRepository;
     private final UserRepository userRepository;
     private final Clock clock;
+    private final ApprenticeshipPolicy apprenticeshipPolicy;
 
     @Transactional
     public LessonParticipantDtos.Response create(
@@ -119,6 +121,9 @@ public class LessonParticipantService {
         int existing = 0;
 
         for (CohortEnrollment enrollment : enrollments) {
+            if (!ApprenticeshipPolicy.allowsDeliveryMode(lesson.getDeliveryMode(), enrollment.getContract())) {
+                continue;
+            }
             String learnerId = enrollment.getContract().getLearner().getId();
             if (participantRepository.existsByLesson_IdAndLearner_Id(lessonId, learnerId)) {
                 existing++;
@@ -271,6 +276,7 @@ public class LessonParticipantService {
                 participant.getLesson(),
                 lessonDate(participant.getLesson())
         );
+        apprenticeshipPolicy.validateParticipation(participant, participant.getLesson(), lessonDate(participant.getLesson()));
     }
 
     private void ensureLessonAcceptsAssignments(Lesson lesson) {

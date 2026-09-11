@@ -1,5 +1,6 @@
 package dev.lourencogabriel.inatead.contract.service;
 
+import dev.lourencogabriel.inatead.project.ApprenticeshipPolicy;
 import dev.lourencogabriel.inatead.cohort.repository.CohortEnrollmentRepository;
 import dev.lourencogabriel.inatead.cohort.service.CohortEnrollmentLifecycleService;
 import dev.lourencogabriel.inatead.contract.dto.ContractDtos;
@@ -36,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
@@ -64,6 +66,8 @@ class ContractServiceTest {
     private CohortEnrollmentLifecycleService enrollmentLifecycleService;
     @Mock
     private LifecycleStatusHistoryService historyService;
+    @Mock
+    private ApprenticeshipPolicy apprenticeshipPolicy;
 
     private ContractService service;
     private Learner learner;
@@ -79,7 +83,8 @@ class ContractServiceTest {
                 documentRepository,
                 enrollmentLifecycleService,
                 historyService,
-                CLOCK
+                CLOCK,
+                apprenticeshipPolicy
         );
         learner = learner(LocalDate.of(2000, 1, 1), false);
         employer = organization("employer", OrganizationType.EMPLOYER);
@@ -193,6 +198,30 @@ class ContractServiceTest {
                 request(null, LocalDate.now(CLOCK), ContractStatus.ACTIVE, null),
                 "admin"
         ));
+    }
+
+    @Test
+    void shouldValidateWorkloadBeforeChangingAnOnlineParticipantsContract() {
+        Contract contract = existingContract(ContractStatus.ACTIVE, LocalDate.of(2026, 12, 31));
+        stubUpdateLookup(contract);
+        doThrow(new BusinessRuleException("Contract has open online participants"))
+                .when(apprenticeshipPolicy).validateWorkloadChange(contract, 1200);
+        var request = new ContractDtos.Request("learner", "employer", null, contract.getStartDate(),
+                contract.getEndDate(), contract.getMonthlySalary(), 1200, ContractStatus.ACTIVE, null);
+
+        assertThrows(BusinessRuleException.class, () -> service.update(contract.getId(), request, "admin"));
+
+        assertEquals(1800, contract.getWeeklyWorkloadMinutes());
+        verify(contractRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldKeepAcceptingMinutesInTheGeneralContractApi() {
+        stubSave();
+        var request = new ContractDtos.Request("learner", "employer", null, LocalDate.of(2026, 1, 1),
+                LocalDate.of(2026, 12, 31), new BigDecimal("1200.00"), 1500, ContractStatus.DRAFT, null);
+
+        assertEquals(1500, service.create(request).weeklyWorkloadMinutes());
     }
 
     private void stubSave() {

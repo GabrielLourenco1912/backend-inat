@@ -1,5 +1,6 @@
 package dev.lourencogabriel.inatead.lesson.service;
 
+import dev.lourencogabriel.inatead.project.ApprenticeshipPolicy;
 import dev.lourencogabriel.inatead.activity.repository.ActivityRepository;
 import dev.lourencogabriel.inatead.cohort.repository.CohortRepository;
 import dev.lourencogabriel.inatead.lesson.dto.LessonDtos;
@@ -47,6 +48,8 @@ public class LessonService extends AbstractCrudService<Lesson, LessonDtos.Reques
     private final ActivityRepository activityRepository;
     private final NotificationRepository notificationRepository;
     private final Clock clock;
+    private final ApprenticeshipPolicy apprenticeshipPolicy;
+    private final LessonParticipantService participantService;
 
     public LessonService(
             LessonRepository lessonRepository,
@@ -56,7 +59,9 @@ public class LessonService extends AbstractCrudService<Lesson, LessonDtos.Reques
             LessonParticipantRepository participantRepository,
             ActivityRepository activityRepository,
             NotificationRepository notificationRepository,
-            Clock clock
+            Clock clock,
+            ApprenticeshipPolicy apprenticeshipPolicy,
+            LessonParticipantService participantService
     ) {
         super(lessonRepository, "Lesson");
         this.lessonRepository = lessonRepository;
@@ -67,6 +72,18 @@ public class LessonService extends AbstractCrudService<Lesson, LessonDtos.Reques
         this.activityRepository = activityRepository;
         this.notificationRepository = notificationRepository;
         this.clock = clock;
+        this.apprenticeshipPolicy = apprenticeshipPolicy;
+        this.participantService = participantService;
+    }
+
+    @Override
+    @Transactional
+    public LessonDtos.Response create(LessonDtos.Request request) {
+        LessonDtos.Response response = super.create(request);
+        if (response.deliveryMode() == DeliveryMode.ONLINE) {
+            participantService.generateRegularRoster(response.id());
+        }
+        return response;
     }
 
     @Override
@@ -181,6 +198,7 @@ public class LessonService extends AbstractCrudService<Lesson, LessonDtos.Reques
         LessonStatus previousStatus = lesson.getStatus();
         String previousCohortId = lesson.getCohort().getId();
         LocalDate previousLessonDate = lessonDate(lesson);
+        DeliveryMode previousDeliveryMode = lesson.getDeliveryMode();
 
         apply(lesson, request);
         validate(lesson, false);
@@ -191,7 +209,9 @@ public class LessonService extends AbstractCrudService<Lesson, LessonDtos.Reques
         if (cohortChanged && lesson.getCohort().getStatus() != CohortStatus.ACTIVE) {
             throw new BusinessRuleException("A lesson can only be moved to an active cohort");
         }
-        if (cohortChanged || lessonDateChanged) {
+        boolean deliveryModeChanged = previousDeliveryMode != lesson.getDeliveryMode();
+        if (cohortChanged || lessonDateChanged
+                || deliveryModeChanged && lesson.getStatus() != LessonStatus.CANCELLED) {
             validateExistingRosterContext(lesson);
         }
 
@@ -274,11 +294,10 @@ public class LessonService extends AbstractCrudService<Lesson, LessonDtos.Reques
         LocalDate date = lessonDate(lesson);
         participantRepository.findAllByLesson_Id(lesson.getId()).stream()
                 .filter(participant -> participant.getStatus() != ParticipationStatus.CANCELLED)
-                .forEach(participant -> LessonParticipantRules.validateContext(
-                        participant,
-                        lesson,
-                        date
-                ));
+                .forEach(participant -> {
+                    LessonParticipantRules.validateContext(participant, lesson, date);
+                    apprenticeshipPolicy.validateParticipation(participant, lesson, date);
+                });
     }
 
     private boolean isOpen(LessonStatus status) {
