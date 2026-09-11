@@ -4,12 +4,14 @@ import dev.lourencogabriel.inatead.auth.authorization.DomainAuthorization;
 import dev.lourencogabriel.inatead.document.dto.PersonDocumentDtos;
 import dev.lourencogabriel.inatead.document.service.PersonDocumentService;
 import dev.lourencogabriel.inatead.shared.api.PageResponse;
+import dev.lourencogabriel.inatead.shared.model.DocumentVerificationStatus;
 import dev.lourencogabriel.inatead.web.dto.ApiResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -65,10 +67,15 @@ public class PersonDocumentController {
     @GetMapping
     public ApiResponse<PageResponse<PersonDocumentDtos.Response>> findAll(
             @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
+            @RequestParam(required = false) String personId,
+            @RequestParam(required = false) DocumentVerificationStatus verificationStatus
     ) {
+        Sort sort = verificationStatus == DocumentVerificationStatus.EXPIRED
+                ? Sort.by("expiresOn").ascending().and(Sort.by("id"))
+                : Sort.by("createdAt").descending().and(Sort.by("id"));
         return new ApiResponse<>(
-                service.findAll(PageRequest.of(page, size)),
+                service.findAll(personId, verificationStatus, PageRequest.of(page, size, sort)),
                 "Person documents found"
         );
     }

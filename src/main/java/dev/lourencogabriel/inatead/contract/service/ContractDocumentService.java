@@ -64,6 +64,14 @@ public class ContractDocumentService {
         return PageResponse.from(documentRepository.findAll(pageable).map(this::toResponse));
     }
 
+    @Transactional(readOnly = true)
+    public PageResponse<ContractDocumentDtos.Response> findAll(String contractId, Pageable pageable) {
+        var documents = contractId == null
+                ? documentRepository.findAll(pageable)
+                : documentRepository.findByContract_Id(contractId, pageable);
+        return PageResponse.from(documents.map(this::toResponse));
+    }
+
     @Transactional
     public ContractDocumentDtos.Response update(
             String id,

@@ -3,6 +3,7 @@ package dev.lourencogabriel.inatead.document.repository;
 import dev.lourencogabriel.inatead.document.model.PersonDocument;
 import dev.lourencogabriel.inatead.shared.model.DocumentVerificationStatus;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -14,6 +15,14 @@ import java.util.List;
 import java.util.Optional;
 
 public interface PersonDocumentRepository extends JpaRepository<PersonDocument, String> {
+
+    Page<PersonDocument> findByPerson_Id(String personId, Pageable pageable);
+
+    Page<PersonDocument> findByVerificationStatus(DocumentVerificationStatus status, Pageable pageable);
+
+    Page<PersonDocument> findByPerson_IdAndVerificationStatus(
+            String personId, DocumentVerificationStatus status, Pageable pageable
+    );
 
     boolean existsByDocumentType_Id(Short documentTypeId);
 

@@ -1,9 +1,13 @@
 package dev.lourencogabriel.inatead.contract.repository;
 
 import dev.lourencogabriel.inatead.contract.model.ContractDocument;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ContractDocumentRepository extends JpaRepository<ContractDocument, String> {
+
+    Page<ContractDocument> findByContract_Id(String contractId, Pageable pageable);
 
     boolean existsByDocumentType_Id(Short documentTypeId);
 

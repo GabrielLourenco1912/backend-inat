@@ -18,6 +18,7 @@ import dev.lourencogabriel.inatead.web.exception.BusinessRuleException;
 import dev.lourencogabriel.inatead.web.exception.ResourceConflictException;
 import dev.lourencogabriel.inatead.web.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -76,6 +77,25 @@ public class PersonDocumentService {
     @Transactional(readOnly = true)
     public PageResponse<PersonDocumentDtos.Response> findAll(Pageable pageable) {
         return PageResponse.from(documentRepository.findAll(pageable).map(this::toResponse));
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<PersonDocumentDtos.Response> findAll(
+            String personId, DocumentVerificationStatus verificationStatus, Pageable pageable
+    ) {
+        Page<PersonDocument> documents;
+        if (personId != null && verificationStatus != null) {
+            documents = documentRepository.findByPerson_IdAndVerificationStatus(
+                    personId, verificationStatus, pageable
+            );
+        } else if (personId != null) {
+            documents = documentRepository.findByPerson_Id(personId, pageable);
+        } else if (verificationStatus != null) {
+            documents = documentRepository.findByVerificationStatus(verificationStatus, pageable);
+        } else {
+            documents = documentRepository.findAll(pageable);
+        }
+        return PageResponse.from(documents.map(this::toResponse));
     }
 
     @Transactional

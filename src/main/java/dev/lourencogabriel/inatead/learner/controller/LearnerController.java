@@ -38,10 +38,13 @@ public class LearnerController {
     @PreAuthorize("@domainAuthorization.hasAnyRole(authentication, 'ADMIN')")
     public ApiResponse<PageResponse<LearnerDtos.Response>> findAll(
             @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
+            @RequestParam(required = false) String personId
     ) {
         return new ApiResponse<>(
-                service.findAll(PageRequest.of(page, size)),
+                personId == null
+                        ? service.findAll(PageRequest.of(page, size))
+                        : service.findByPerson(personId, PageRequest.of(page, size)),
                 "Learners found"
         );
     }

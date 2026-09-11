@@ -7,10 +7,13 @@ import dev.lourencogabriel.inatead.person.repository.PersonRepository;
 import dev.lourencogabriel.inatead.person.model.PersonTypeCode;
 import dev.lourencogabriel.inatead.person.service.PersonTypeRules;
 import dev.lourencogabriel.inatead.shared.api.AbstractCrudService;
+import dev.lourencogabriel.inatead.shared.api.PageResponse;
 import dev.lourencogabriel.inatead.web.exception.BusinessRuleException;
 import dev.lourencogabriel.inatead.web.exception.ResourceConflictException;
 import dev.lourencogabriel.inatead.web.exception.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Pageable;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class LearnerService extends AbstractCrudService<Learner, LearnerDtos.Request, LearnerDtos.Response> {
@@ -28,6 +31,11 @@ public class LearnerService extends AbstractCrudService<Learner, LearnerDtos.Req
         this.learnerRepository = learnerRepository;
         this.personRepository = personRepository;
         this.relationshipPolicy = relationshipPolicy;
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<LearnerDtos.Response> findByPerson(String personId, Pageable pageable) {
+        return PageResponse.from(learnerRepository.findByPerson_Id(personId, pageable).map(this::toResponse));
     }
 
     @Override

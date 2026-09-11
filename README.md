@@ -223,6 +223,15 @@ A inspeção estrutural é sempre ativa. O ClamAV é opcional por padrão para n
 
 Cada tipo possui um `scope`: `PERSON`, `CONTRACT` ou `BOTH`. Um tipo não pode ser alterado para um escopo incompatível enquanto já estiver em uso.
 
+As listagens administrativas aplicam os filtros no banco, antes da paginação (`page` começa em 0; `size` vai de 1 a 100):
+
+- `GET /api/person-documents?personId=...` retorna somente os documentos daquela pessoa;
+- `GET /api/person-documents?verificationStatus=EXPIRED` retorna somente expirados, ordenados pela validade mais antiga e pelo identificador; `personId` e `verificationStatus` podem ser combinados;
+- `GET /api/contract-documents?contractId=...` retorna somente os documentos daquele contrato, sem documentos pessoais do aprendiz;
+- `GET /api/learners?personId=...` localiza o perfil do aprendiz para os links da lista de expirados, sem carregar todos os aprendizes.
+
+Sem filtros, os endpoints mantêm a listagem administrativa existente. Listagens documentais que não filtram por `EXPIRED` são ordenadas por criação decrescente e identificador. Os filtros não ampliam permissões: essas listagens continuam restritas a `ADMIN`.
+
 Documentos pessoais seguem estas regras:
 
 - somente uma pessoa com status `ACTIVE` pode receber novos documentos ou ter seus metadados alterados;

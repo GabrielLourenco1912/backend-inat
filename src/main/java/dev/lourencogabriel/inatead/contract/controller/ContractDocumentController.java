@@ -12,6 +12,7 @@ import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -66,10 +67,13 @@ public class ContractDocumentController {
     @GetMapping
     public ApiResponse<PageResponse<ContractDocumentDtos.Response>> findAll(
             @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
+            @RequestParam(required = false) String contractId
     ) {
         return new ApiResponse<>(
-                service.findAll(PageRequest.of(page, size)),
+                service.findAll(contractId, PageRequest.of(
+                        page, size, Sort.by("createdAt").descending().and(Sort.by("id"))
+                )),
                 "Contract documents found"
         );
     }
