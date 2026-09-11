@@ -99,7 +99,7 @@ Na criação administrativa de usuários, `personId` também é obrigatório e p
 
 A existência da pessoa elimina a ideia de uma “conta em análise”, mas não permite inferir com segurança se ela é administradora, instrutora, aprendiz ou gestora. Por isso, papel e identidade continuam separados: a conta recebe somente papéis explicitamente concedidos por um administrador. `INVITED` não é um papel nem uma análise cadastral; é apenas o estado transitório até a confirmação do e-mail.
 
-A concessão da role `LEARNER` exige que a pessoa vinculada à conta possua um perfil `Learner` com status `ACTIVE`; perfis ausentes, inativos ou suspensos resultam em `422 Unprocessable Entity`. As demais roles não dependem de um perfil `Learner`.
+A concessão de qualquer role exige que a pessoa vinculada à conta possua o `personType` de mesmo código. A role `LEARNER` também exige um perfil `Learner` com status `ACTIVE`; tipos incompatíveis e perfis ausentes, inativos ou suspensos resultam em `422 Unprocessable Entity`. As demais roles não dependem de um perfil `Learner`. Classificar uma pessoa não concede roles automaticamente.
 
 O cadastro não emite mais JWT imediatamente. Ele cria a conta como `INVITED`, envia um código de seis dígitos e retorna um desafio com `challengeId`, finalidade, e-mail mascarado, expiração e número máximo de tentativas. O código confirma a posse do e-mail e somente `POST /api/auth/challenge/verify` emite os tokens e ativa a conta.
 
@@ -257,9 +257,23 @@ Em instalações que já possuam a restrição antiga `uk_files_storage_key`, el
 
 `POST /api/learner-onboardings` é a única rota para criar um perfil de aprendiz. Ela cria o perfil de pessoa, incluindo seu endereço, e o perfil de aprendiz, além de vincular os responsáveis em uma única transação. Se o CPF já existir, a pessoa é reutilizada sem ter seus dados sobrescritos; a data de nascimento informada deve coincidir com o cadastro existente. Aprendizes menores de 18 anos devem receber ao menos um vínculo marcado como responsável legal.
 
-As pessoas usadas como responsáveis precisam existir previamente e ter ao menos 18 anos. As atualizações de pessoa, aprendiz e vínculo de responsável não podem tornar essas regras inválidas, e o último responsável legal de um aprendiz menor não pode ser removido ou desmarcado. Os endpoints individuais de aprendizes permanecem disponíveis somente para consulta, atualização e exclusão administrativa; `POST /api/learners` não existe.
+O cadastro de pessoa enviado no onboarding deve incluir `LEARNER` em `personTypes`. Se o CPF já existir, a pessoa cadastrada também precisa ter esse tipo; o onboarding não altera sua classificação implicitamente. As pessoas usadas como responsáveis precisam existir previamente, ter o tipo `GUARDIAN` e ao menos 18 anos. As atualizações de pessoa, aprendiz e vínculo de responsável não podem tornar essas regras inválidas, e o último responsável legal de um aprendiz menor não pode ser removido ou desmarcado. Os endpoints individuais de aprendizes permanecem disponíveis somente para consulta, atualização e exclusão administrativa; `POST /api/learners` não existe.
 
 A escola é vinculada pelo contrato. Ela é obrigatória quando o aprendiz tinha menos de 18 anos na data inicial do contrato e ainda não concluiu o ensino médio. Atualizações de pessoa, aprendiz, contrato ou tipo da organização preservam essa regra. Endereços são componentes obrigatórios de pessoas e organizações e não possuem endpoint próprio.
+
+### Tipos de pessoa
+
+`PersonType` possui os códigos fixos `ADMIN`, `INSTRUCTOR`, `LEARNER`, `EMPLOYER_MANAGER` e `GUARDIAN`. A relação com `Person` é muitos-para-muitos, persistida nas tabelas `person_types` e `person_type_assignments`, com unicidade por pessoa e tipo. Os tipos classificam responsabilidades; as roles do usuário continuam controlando o acesso ao sistema.
+
+Os endpoints existentes `POST /api/people`, `PUT /api/people/{id}` e suas respostas aceitam/exibem `personTypes`, por exemplo `"personTypes": ["INSTRUCTOR", "GUARDIAN"]`. A gestão desses dados é exclusiva de `ADMIN`. Uma lista explícita substitui os tipos atuais; `[]` remove os tipos não utilizados. Omitir o campo ou enviar `null` preserva os tipos em uma atualização e cria uma pessoa sem classificação em um novo cadastro. Códigos desconhecidos e elementos nulos são rejeitados. `GET /api/people?personType=GUARDIAN&page=0&size=20` aplica o filtro antes da paginação.
+
+- Instrutores de aulas exigem `INSTRUCTOR`, além da conta ativa com role `INSTRUCTOR` já exigida pelo sistema.
+- Perfis de aprendiz exigem `LEARNER`; vínculos de responsável exigem `GUARDIAN` e maioridade.
+- Funções organizacionais cujo `membershipRole` corresponda a um dos códigos de tipo exigem esse tipo. Funções de negócio livres continuam disponíveis.
+- A concessão de qualquer role exige o tipo correspondente na pessoa. `GUARDIAN` não é uma role de acesso.
+- Um tipo não pode ser removido enquanto houver um perfil de aprendiz, vínculo de responsável, atribuição de instrutor em aula, função organizacional correspondente ou role que dependa dele. Essa verificação também considera vínculos históricos ainda cadastrados. As atribuições e a edição de tipos bloqueiam a pessoa durante a transação.
+
+Na primeira inicialização do catálogo, os registros anteriores recebem os tipos deduzidos de suas roles, perfis de aprendiz, vínculos de responsável, aulas e funções organizacionais correspondentes. A atualização é transacional e executada somente quando o catálogo ainda está vazio; reinícios seguintes preservam as escolhas administrativas. O esquema segue a configuração JPA de criação/atualização já utilizada pela aplicação.
 
 ## Tecnologias
 

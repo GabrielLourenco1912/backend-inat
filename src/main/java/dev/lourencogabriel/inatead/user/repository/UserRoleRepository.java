@@ -12,6 +12,9 @@ import java.util.List;
 
 public interface UserRoleRepository extends JpaRepository<UserRole, UserRoleId> {
 
+    @Query("select distinct ur.role.code from UserRole ur where ur.user.person.id = :personId")
+    List<String> findRoleCodesByPersonId(@Param("personId") String personId);
+
     @EntityGraph(attributePaths = {"role", "grantedByUser"})
     List<UserRole> findAllByUser_Ulid(String userId);
 

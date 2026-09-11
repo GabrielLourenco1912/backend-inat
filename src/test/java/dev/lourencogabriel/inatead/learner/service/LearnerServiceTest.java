@@ -4,6 +4,8 @@ import dev.lourencogabriel.inatead.learner.dto.LearnerDtos;
 import dev.lourencogabriel.inatead.learner.model.Learner;
 import dev.lourencogabriel.inatead.learner.repository.LearnerRepository;
 import dev.lourencogabriel.inatead.person.model.Person;
+import dev.lourencogabriel.inatead.person.model.PersonType;
+import dev.lourencogabriel.inatead.person.model.PersonTypeCode;
 import dev.lourencogabriel.inatead.person.repository.PersonRepository;
 import dev.lourencogabriel.inatead.shared.model.RecordStatus;
 import dev.lourencogabriel.inatead.web.exception.BusinessRuleException;
@@ -47,7 +49,7 @@ class LearnerServiceTest {
     void shouldValidateRelationshipsWhenLearnerIsUpdated() {
         Learner learner = learner("person");
         when(learnerRepository.findById("learner")).thenReturn(Optional.of(learner));
-        when(personRepository.findById("person")).thenReturn(Optional.of(learner.getPerson()));
+        when(personRepository.findByIdForUpdate("person")).thenReturn(Optional.of(learner.getPerson()));
         when(learnerRepository.save(learner)).thenReturn(learner);
 
         service.update("learner", request("person"));
@@ -65,7 +67,7 @@ class LearnerServiceTest {
                 () -> service.update("learner", request("another-person"))
         );
 
-        verify(personRepository, never()).findById(any());
+        verify(personRepository, never()).findByIdForUpdate(any());
         verify(learnerRepository, never()).save(any());
     }
 
@@ -81,6 +83,7 @@ class LearnerServiceTest {
     private Learner learner(String personId) {
         Person person = new Person();
         person.setId(personId);
+        person.getPersonTypes().add(new PersonType(PersonTypeCode.LEARNER));
         person.setBirthDate(LocalDate.of(2000, 1, 1));
         Learner learner = new Learner();
         learner.setId("learner");

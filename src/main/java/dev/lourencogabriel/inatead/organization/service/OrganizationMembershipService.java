@@ -5,10 +5,13 @@ import dev.lourencogabriel.inatead.organization.model.OrganizationMembership;
 import dev.lourencogabriel.inatead.organization.repository.OrganizationMembershipRepository;
 import dev.lourencogabriel.inatead.organization.repository.OrganizationRepository;
 import dev.lourencogabriel.inatead.person.repository.PersonRepository;
+import dev.lourencogabriel.inatead.person.model.PersonTypeCode;
+import dev.lourencogabriel.inatead.person.service.PersonTypeRules;
 import dev.lourencogabriel.inatead.shared.api.AbstractCrudService;
 import dev.lourencogabriel.inatead.shared.persistence.EntityLookup;
 import dev.lourencogabriel.inatead.web.exception.BusinessRuleException;
 import dev.lourencogabriel.inatead.web.exception.ResourceConflictException;
+import dev.lourencogabriel.inatead.web.exception.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.util.Locale;
@@ -45,7 +48,8 @@ public class OrganizationMembershipService extends AbstractCrudService<
             OrganizationMembership entity,
             OrganizationMembershipDtos.Request request
     ) {
-        entity.setPerson(EntityLookup.require(personRepository, request.personId(), "Person"));
+        entity.setPerson(personRepository.findByIdForUpdate(request.personId())
+                .orElseThrow(() -> new ResourceNotFoundException("Person", request.personId())));
         entity.setOrganization(EntityLookup.require(
                 organizationRepository,
                 request.organizationId(),
@@ -60,6 +64,8 @@ public class OrganizationMembershipService extends AbstractCrudService<
 
     @Override
     protected void validate(OrganizationMembership entity, boolean creating) {
+        PersonTypeCode.fromCode(entity.getMembershipRole())
+                .ifPresent(type -> PersonTypeRules.requireType(entity.getPerson(), type));
         if (entity.getEndDate() != null && entity.getEndDate().isBefore(entity.getStartDate())) {
             throw new BusinessRuleException("Membership end date cannot precede start date");
         }

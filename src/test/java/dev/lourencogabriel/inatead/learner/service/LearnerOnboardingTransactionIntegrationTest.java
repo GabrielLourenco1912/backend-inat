@@ -5,6 +5,7 @@ import dev.lourencogabriel.inatead.address.repository.AddressRepository;
 import dev.lourencogabriel.inatead.learner.dto.LearnerOnboardingDtos;
 import dev.lourencogabriel.inatead.learner.repository.LearnerRepository;
 import dev.lourencogabriel.inatead.person.dto.PersonDtos;
+import dev.lourencogabriel.inatead.person.model.PersonTypeCode;
 import dev.lourencogabriel.inatead.person.repository.PersonRepository;
 import dev.lourencogabriel.inatead.shared.model.RecordStatus;
 import dev.lourencogabriel.inatead.web.exception.ResourceNotFoundException;
@@ -15,6 +16,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -47,7 +49,8 @@ class LearnerOnboardingTransactionIntegrationTest {
                         "41999999999",
                         LocalDate.of(2010, 1, 1),
                         null,
-                        RecordStatus.ACTIVE
+                        RecordStatus.ACTIVE,
+                        Set.of(PersonTypeCode.LEARNER)
                 ),
                 new LearnerOnboardingDtos.LearnerProfile(
                         registrationNumber,

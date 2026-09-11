@@ -3,8 +3,12 @@ package dev.lourencogabriel.inatead.user.service;
 import dev.lourencogabriel.inatead.learner.model.Learner;
 import dev.lourencogabriel.inatead.learner.repository.LearnerRepository;
 import dev.lourencogabriel.inatead.person.model.Person;
+import dev.lourencogabriel.inatead.person.model.PersonType;
+import dev.lourencogabriel.inatead.person.model.PersonTypeCode;
+import dev.lourencogabriel.inatead.person.repository.PersonRepository;
 import dev.lourencogabriel.inatead.shared.model.RecordStatus;
 import dev.lourencogabriel.inatead.user.model.Role;
+import dev.lourencogabriel.inatead.user.model.SystemRoleCode;
 import dev.lourencogabriel.inatead.user.model.User;
 import dev.lourencogabriel.inatead.user.model.UserRole;
 import dev.lourencogabriel.inatead.user.model.UserRoleId;
@@ -13,6 +17,8 @@ import dev.lourencogabriel.inatead.user.repository.UserRepository;
 import dev.lourencogabriel.inatead.user.repository.UserRoleRepository;
 import dev.lourencogabriel.inatead.web.exception.BusinessRuleException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -42,6 +48,9 @@ class UserRoleServiceTest {
 
     @Mock
     private LearnerRepository learnerRepository;
+
+    @Mock
+    private PersonRepository personRepository;
 
     @InjectMocks
     private UserRoleService service;
@@ -185,9 +194,48 @@ class UserRoleServiceTest {
         verifyNoInteractions(learnerRepository);
     }
 
+    @ParameterizedTest
+    @EnumSource(SystemRoleCode.class)
+    void shouldRejectEveryRoleWithoutItsCorrespondingPersonType(SystemRoleCode code) {
+        Person person = person();
+        person.getPersonTypes().clear();
+        // A different type must not qualify the person for this role.
+        person.getPersonTypes().add(new PersonType(PersonTypeCode.GUARDIAN));
+        String userId = "typed-user";
+        short roleId = 1;
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user(userId, person)));
+        when(roleRepository.findById(roleId)).thenReturn(Optional.of(role(roleId, code.name())));
+
+        BusinessRuleException error = assertThrows(BusinessRuleException.class,
+                () -> service.grant(userId, roleId, null));
+
+        assertEquals("The person must have the " + code + " person type", error.getMessage());
+        verify(userRoleRepository, never()).save(any());
+        verifyNoInteractions(learnerRepository);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = SystemRoleCode.class, names = {"ADMIN", "INSTRUCTOR", "EMPLOYER_MANAGER"})
+    void shouldGrantNonLearnerRolesWithMatchingPersonType(SystemRoleCode code) {
+        Person person = person();
+        person.getPersonTypes().clear();
+        person.getPersonTypes().add(new PersonType(PersonTypeCode.valueOf(code.name())));
+        String userId = "typed-user";
+        short roleId = 1;
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user(userId, person)));
+        when(roleRepository.findById(roleId)).thenReturn(Optional.of(role(roleId, code.name())));
+        when(userRoleRepository.save(any(UserRole.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertEquals(code.name(), service.grant(userId, roleId, null).roleCode());
+        verifyNoInteractions(learnerRepository);
+    }
+
     private Person person() {
         Person person = new Person();
         person.setId("01JTESTPERSON000000000000000");
+        person.getPersonTypes().add(new PersonType(PersonTypeCode.LEARNER));
+        person.getPersonTypes().add(new PersonType(PersonTypeCode.INSTRUCTOR));
+        when(personRepository.findByIdForUpdate(person.getId())).thenReturn(Optional.of(person));
         return person;
     }
 

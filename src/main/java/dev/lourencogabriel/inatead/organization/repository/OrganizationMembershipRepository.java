@@ -12,6 +12,9 @@ import java.util.List;
 
 public interface OrganizationMembershipRepository extends JpaRepository<OrganizationMembership, String> {
 
+    @Query("select distinct m.membershipRole from OrganizationMembership m where m.person.id = :personId")
+    List<String> findRoleCodesByPersonId(@Param("personId") String personId);
+
     @EntityGraph(attributePaths = "organization")
     @Query("""
             select membership

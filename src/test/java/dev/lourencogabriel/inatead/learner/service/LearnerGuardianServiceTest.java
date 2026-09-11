@@ -54,7 +54,7 @@ class LearnerGuardianServiceTest {
         Learner learner = learner();
         Person guardian = person("guardian", LocalDate.of(2010, 1, 1));
         when(learnerRepository.findById("learner")).thenReturn(Optional.of(learner));
-        when(personRepository.findById("guardian")).thenReturn(Optional.of(guardian));
+        when(personRepository.findByIdForUpdate("guardian")).thenReturn(Optional.of(guardian));
         doThrow(new BusinessRuleException("A guardian must be at least 18 years old"))
                 .when(relationshipPolicy).validateGuardianEligibility(guardian);
 
@@ -71,6 +71,7 @@ class LearnerGuardianServiceTest {
         LearnerGuardian link = guardianLink();
         when(repository.findById(new LearnerGuardianId("learner", "guardian")))
                 .thenReturn(Optional.of(link));
+        when(personRepository.findByIdForUpdate("guardian")).thenReturn(Optional.of(link.getGuardianPerson()));
         doThrow(new BusinessRuleException("A minor learner requires at least one legal guardian"))
                 .when(relationshipPolicy).validateGuardianUpdate(link, false);
 

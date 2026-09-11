@@ -14,6 +14,8 @@ import dev.lourencogabriel.inatead.lesson.repository.LessonParticipantRepository
 import dev.lourencogabriel.inatead.lesson.repository.LessonRepository;
 import dev.lourencogabriel.inatead.notification.repository.NotificationRepository;
 import dev.lourencogabriel.inatead.person.model.Person;
+import dev.lourencogabriel.inatead.person.model.PersonType;
+import dev.lourencogabriel.inatead.person.model.PersonTypeCode;
 import dev.lourencogabriel.inatead.person.repository.PersonRepository;
 import dev.lourencogabriel.inatead.shared.model.DeliveryMode;
 import dev.lourencogabriel.inatead.shared.model.ActivityStatus;
@@ -99,6 +101,7 @@ class LessonServiceScheduleConflictTest {
         cohort.setStatus(CohortStatus.ACTIVE);
 
         instructor = new Person();
+        instructor.getPersonTypes().add(new PersonType(PersonTypeCode.INSTRUCTOR));
         instructor.setId("instructor");
     }
 
@@ -284,7 +287,7 @@ class LessonServiceScheduleConflictTest {
     @Test
     void shouldRequireScheduledStatusOnCreation() {
         when(cohortRepository.findById("cohort")).thenReturn(Optional.of(cohort));
-        when(personRepository.findById("instructor")).thenReturn(Optional.of(instructor));
+        when(personRepository.findByIdForUpdate("instructor")).thenReturn(Optional.of(instructor));
 
         BusinessRuleException exception = assertThrows(
                 BusinessRuleException.class,
@@ -431,7 +434,7 @@ class LessonServiceScheduleConflictTest {
 
         when(lessonRepository.findById("lesson")).thenReturn(Optional.of(lesson));
         when(cohortRepository.findById("target-cohort")).thenReturn(Optional.of(targetCohort));
-        when(personRepository.findById("instructor")).thenReturn(Optional.of(instructor));
+        when(personRepository.findByIdForUpdate("instructor")).thenReturn(Optional.of(instructor));
         when(userRepository.existsActivePersonWithRole(
                 "instructor",
                 UserAccountStatus.ACTIVE,
@@ -583,9 +586,22 @@ class LessonServiceScheduleConflictTest {
         verify(lessonRepository).delete(lesson);
     }
 
+    @Test
+    void shouldRejectInstructorWithoutPersonType() {
+        instructor.getPersonTypes().clear();
+        when(cohortRepository.findById("cohort")).thenReturn(Optional.of(cohort));
+        when(personRepository.findByIdForUpdate("instructor")).thenReturn(Optional.of(instructor));
+
+        BusinessRuleException error = assertThrows(BusinessRuleException.class,
+                () -> service.create(request()));
+
+        assertEquals("The person must have the INSTRUCTOR person type", error.getMessage());
+        verify(lessonRepository, never()).save(any());
+    }
+
     private void stubReferences() {
         when(cohortRepository.findById("cohort")).thenReturn(Optional.of(cohort));
-        when(personRepository.findById("instructor")).thenReturn(Optional.of(instructor));
+        when(personRepository.findByIdForUpdate("instructor")).thenReturn(Optional.of(instructor));
         when(userRepository.existsActivePersonWithRole(
                 "instructor",
                 UserAccountStatus.ACTIVE,

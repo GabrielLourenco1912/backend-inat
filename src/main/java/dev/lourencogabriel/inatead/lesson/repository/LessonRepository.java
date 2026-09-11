@@ -13,6 +13,8 @@ import java.util.List;
 
 public interface LessonRepository extends JpaRepository<Lesson, String> {
 
+    boolean existsByInstructorPerson_Id(String personId);
+
     List<Lesson> findAllByInstructorPerson_IdOrderByStartsAtDesc(String instructorPersonId);
 
     @Query("""

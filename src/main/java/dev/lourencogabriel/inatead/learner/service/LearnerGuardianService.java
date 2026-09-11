@@ -33,7 +33,7 @@ public class LearnerGuardianService {
             LearnerGuardianDtos.Request request
     ) {
         Learner learner = EntityLookup.require(learnerRepository, learnerId, "Learner");
-        Person guardian = EntityLookup.require(personRepository, request.guardianPersonId(), "Guardian");
+        Person guardian = requireGuardianForUpdate(request.guardianPersonId());
         LearnerGuardianId id = new LearnerGuardianId(learnerId, guardian.getId());
         if (repository.existsById(id)) {
             throw new ResourceConflictException("This guardian is already linked to the learner");
@@ -67,6 +67,7 @@ public class LearnerGuardianService {
             throw new BusinessRuleException("guardianPersonId cannot be changed");
         }
         LearnerGuardian link = require(learnerId, guardianPersonId);
+        requireGuardianForUpdate(guardianPersonId);
         relationshipPolicy.validateGuardianEligibility(link.getGuardianPerson());
         relationshipPolicy.validateGuardianUpdate(link, request.legalGuardian());
         validate(link.getLearner(), link.getGuardianPerson(), request, guardianPersonId);
@@ -115,6 +116,11 @@ public class LearnerGuardianService {
                         "Learner guardian",
                         learnerId + "/" + guardianPersonId
                 ));
+    }
+
+    private Person requireGuardianForUpdate(String id) {
+        return personRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Guardian", id));
     }
 
     private LearnerGuardianDtos.Response toResponse(LearnerGuardian link) {

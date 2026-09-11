@@ -5,6 +5,7 @@ import dev.lourencogabriel.inatead.learner.dto.LearnerDtos;
 import dev.lourencogabriel.inatead.learner.dto.LearnerGuardianDtos;
 import dev.lourencogabriel.inatead.learner.dto.LearnerOnboardingDtos;
 import dev.lourencogabriel.inatead.person.dto.PersonDtos;
+import dev.lourencogabriel.inatead.person.model.PersonTypeCode;
 import dev.lourencogabriel.inatead.person.model.Person;
 import dev.lourencogabriel.inatead.person.repository.PersonRepository;
 import dev.lourencogabriel.inatead.person.service.PersonService;
@@ -226,7 +227,8 @@ class LearnerOnboardingServiceTest {
                 "41999999999",
                 birthDate,
                 null,
-                RecordStatus.ACTIVE
+                RecordStatus.ACTIVE,
+                java.util.Set.of(PersonTypeCode.LEARNER)
         );
     }
 
@@ -241,6 +243,7 @@ class LearnerOnboardingServiceTest {
                 request.birthDate(),
                 request.gender(),
                 request.status(),
+                request.personTypes(),
                 null,
                 null
         );

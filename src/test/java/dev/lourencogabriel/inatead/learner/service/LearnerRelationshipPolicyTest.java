@@ -7,6 +7,8 @@ import dev.lourencogabriel.inatead.learner.model.LearnerGuardian;
 import dev.lourencogabriel.inatead.learner.repository.LearnerGuardianRepository;
 import dev.lourencogabriel.inatead.learner.repository.LearnerRepository;
 import dev.lourencogabriel.inatead.person.model.Person;
+import dev.lourencogabriel.inatead.person.model.PersonType;
+import dev.lourencogabriel.inatead.person.model.PersonTypeCode;
 import dev.lourencogabriel.inatead.shared.model.OrganizationType;
 import dev.lourencogabriel.inatead.shared.model.RecordStatus;
 import dev.lourencogabriel.inatead.web.exception.BusinessRuleException;
@@ -62,6 +64,14 @@ class LearnerRelationshipPolicyTest {
                 BusinessRuleException.class,
                 () -> policy.validateGuardianEligibility(guardian)
         );
+    }
+
+    @Test
+    void shouldRejectAdultWithoutGuardianPersonType() {
+        Person guardian = person("guardian", LocalDate.of(1980, 1, 1));
+        guardian.getPersonTypes().clear();
+
+        assertThrows(BusinessRuleException.class, () -> policy.validateGuardianEligibility(guardian));
     }
 
     @Test
@@ -233,6 +243,7 @@ class LearnerRelationshipPolicyTest {
         Person person = new Person();
         person.setId(id);
         person.setBirthDate(birthDate);
+        person.getPersonTypes().add(new PersonType(PersonTypeCode.GUARDIAN));
         return person;
     }
 }

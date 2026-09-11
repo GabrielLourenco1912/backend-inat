@@ -9,6 +9,8 @@ import dev.lourencogabriel.inatead.lesson.repository.LessonParticipantRepository
 import dev.lourencogabriel.inatead.lesson.repository.LessonRepository;
 import dev.lourencogabriel.inatead.notification.repository.NotificationRepository;
 import dev.lourencogabriel.inatead.person.repository.PersonRepository;
+import dev.lourencogabriel.inatead.person.model.PersonTypeCode;
+import dev.lourencogabriel.inatead.person.service.PersonTypeRules;
 import dev.lourencogabriel.inatead.shared.api.AbstractCrudService;
 import dev.lourencogabriel.inatead.shared.model.CohortStatus;
 import dev.lourencogabriel.inatead.shared.model.DeliveryMode;
@@ -18,6 +20,7 @@ import dev.lourencogabriel.inatead.shared.model.ParticipationStatus;
 import dev.lourencogabriel.inatead.shared.persistence.EntityLookup;
 import dev.lourencogabriel.inatead.web.exception.BusinessRuleException;
 import dev.lourencogabriel.inatead.web.exception.ResourceConflictException;
+import dev.lourencogabriel.inatead.web.exception.ResourceNotFoundException;
 import dev.lourencogabriel.inatead.user.repository.UserRepository;
 import dev.lourencogabriel.inatead.shared.model.UserAccountStatus;
 import org.springframework.stereotype.Service;
@@ -94,11 +97,8 @@ public class LessonService extends AbstractCrudService<Lesson, LessonDtos.Reques
     @Override
     protected void apply(Lesson entity, LessonDtos.Request request) {
         entity.setCohort(EntityLookup.require(cohortRepository, request.cohortId(), "Cohort"));
-        entity.setInstructorPerson(EntityLookup.require(
-                personRepository,
-                request.instructorPersonId(),
-                "Instructor"
-        ));
+        entity.setInstructorPerson(personRepository.findByIdForUpdate(request.instructorPersonId())
+                .orElseThrow(() -> new ResourceNotFoundException("Instructor", request.instructorPersonId())));
         entity.setTitle(request.title().trim());
         entity.setStartsAt(request.startsAt());
         entity.setEndsAt(request.endsAt());
@@ -119,6 +119,7 @@ public class LessonService extends AbstractCrudService<Lesson, LessonDtos.Reques
             throw new BusinessRuleException("Lesson end time must be after its start time");
         }
 
+        PersonTypeRules.requireType(entity.getInstructorPerson(), PersonTypeCode.INSTRUCTOR);
         if (!userRepository.existsActivePersonWithRole(
                 entity.getInstructorPerson().getId(),
                 UserAccountStatus.ACTIVE,

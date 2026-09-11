@@ -14,6 +14,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDate;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -40,7 +41,8 @@ class AddressCompositionIntegrationTest {
                 "41999999999",
                 LocalDate.of(2000, 1, 1),
                 null,
-                RecordStatus.ACTIVE
+                RecordStatus.ACTIVE,
+                Set.of()
         ));
         String addressId = created.address().id();
 
@@ -54,7 +56,8 @@ class AddressCompositionIntegrationTest {
                 "41999999999",
                 LocalDate.of(2000, 1, 1),
                 null,
-                RecordStatus.ACTIVE
+                RecordStatus.ACTIVE,
+                Set.of()
         ));
 
         assertEquals(addressId, updated.address().id());

@@ -4,10 +4,12 @@ import dev.lourencogabriel.inatead.learner.dto.LearnerDtos;
 import dev.lourencogabriel.inatead.learner.model.Learner;
 import dev.lourencogabriel.inatead.learner.repository.LearnerRepository;
 import dev.lourencogabriel.inatead.person.repository.PersonRepository;
+import dev.lourencogabriel.inatead.person.model.PersonTypeCode;
+import dev.lourencogabriel.inatead.person.service.PersonTypeRules;
 import dev.lourencogabriel.inatead.shared.api.AbstractCrudService;
-import dev.lourencogabriel.inatead.shared.persistence.EntityLookup;
 import dev.lourencogabriel.inatead.web.exception.BusinessRuleException;
 import dev.lourencogabriel.inatead.web.exception.ResourceConflictException;
+import dev.lourencogabriel.inatead.web.exception.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -39,7 +41,8 @@ public class LearnerService extends AbstractCrudService<Learner, LearnerDtos.Req
                 && !entity.getPerson().getId().equals(request.personId())) {
             throw new BusinessRuleException("personId cannot be changed");
         }
-        entity.setPerson(EntityLookup.require(personRepository, request.personId(), "Person"));
+        entity.setPerson(personRepository.findByIdForUpdate(request.personId())
+                .orElseThrow(() -> new ResourceNotFoundException("Person", request.personId())));
         entity.setRegistrationNumber(request.registrationNumber().trim());
         entity.setHasCompletedHighSchool(request.hasCompletedHighSchool());
         entity.setStatus(request.status());
@@ -47,6 +50,7 @@ public class LearnerService extends AbstractCrudService<Learner, LearnerDtos.Req
 
     @Override
     protected void validate(Learner entity, boolean creating) {
+        PersonTypeRules.requireType(entity.getPerson(), PersonTypeCode.LEARNER);
         boolean duplicatePerson = creating
                 ? learnerRepository.existsByPerson_Id(entity.getPerson().getId())
                 : learnerRepository.existsByPerson_IdAndIdNot(entity.getPerson().getId(), entity.getId());

@@ -7,6 +7,8 @@ import dev.lourencogabriel.inatead.learner.model.LearnerGuardian;
 import dev.lourencogabriel.inatead.learner.repository.LearnerGuardianRepository;
 import dev.lourencogabriel.inatead.learner.repository.LearnerRepository;
 import dev.lourencogabriel.inatead.person.model.Person;
+import dev.lourencogabriel.inatead.person.model.PersonTypeCode;
+import dev.lourencogabriel.inatead.person.service.PersonTypeRules;
 import dev.lourencogabriel.inatead.shared.model.OrganizationType;
 import dev.lourencogabriel.inatead.shared.model.ContractStatus;
 import dev.lourencogabriel.inatead.shared.model.RecordStatus;
@@ -34,6 +36,7 @@ public class LearnerRelationshipPolicy {
     private final Clock clock;
 
     public void validateGuardianEligibility(Person guardian) {
+        PersonTypeRules.requireType(guardian, PersonTypeCode.GUARDIAN);
         if (isMinorAt(guardian.getBirthDate(), LocalDate.now(clock))) {
             throw new BusinessRuleException("A guardian must be at least 18 years old");
         }

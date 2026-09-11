@@ -1,6 +1,10 @@
 package dev.lourencogabriel.inatead.user.service;
 
 import dev.lourencogabriel.inatead.learner.repository.LearnerRepository;
+import dev.lourencogabriel.inatead.person.model.Person;
+import dev.lourencogabriel.inatead.person.model.PersonTypeCode;
+import dev.lourencogabriel.inatead.person.repository.PersonRepository;
+import dev.lourencogabriel.inatead.person.service.PersonTypeRules;
 import dev.lourencogabriel.inatead.shared.model.RecordStatus;
 import dev.lourencogabriel.inatead.shared.model.UserAccountStatus;
 import dev.lourencogabriel.inatead.shared.persistence.EntityLookup;
@@ -30,6 +34,7 @@ public class UserRoleService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final LearnerRepository learnerRepository;
+    private final PersonRepository personRepository;
 
     @Transactional
     public UserRoleDtos.Response grant(String userId, Short roleId, String grantedByUserId) {
@@ -61,6 +66,10 @@ public class UserRoleService {
     }
 
     private void validateRoleRequirements(User user, Role role) {
+        Person person = user.getPerson() == null ? null
+                : personRepository.findByIdForUpdate(user.getPerson().getId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Person", user.getPerson().getId()));
+        PersonTypeRules.requireType(person, PersonTypeCode.valueOf(role.getCode()));
         if (!SystemRoleCode.LEARNER.name().equals(role.getCode())) {
             return;
         }
