@@ -31,6 +31,8 @@ public interface UserRepository extends JpaRepository<User, String> {
 
     Optional<User> findByPerson_IdAndStatus(String personId, UserAccountStatus status);
 
+    Optional<User> findByPerson_Id(String personId);
+
     @EntityGraph(attributePaths = {"person", "userRoles", "userRoles.role"})
     Optional<User> findWithRolesByUlid(String ulid);
 

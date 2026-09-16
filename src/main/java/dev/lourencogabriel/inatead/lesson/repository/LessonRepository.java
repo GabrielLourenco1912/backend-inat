@@ -2,7 +2,12 @@ package dev.lourencogabriel.inatead.lesson.repository;
 
 import dev.lourencogabriel.inatead.lesson.model.Lesson;
 import dev.lourencogabriel.inatead.shared.model.LessonStatus;
+import dev.lourencogabriel.inatead.shared.model.DeliveryMode;
+import dev.lourencogabriel.inatead.shared.model.ParticipationStatus;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -10,6 +15,7 @@ import org.springframework.data.repository.query.Param;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 public interface LessonRepository extends JpaRepository<Lesson, String> {
 
@@ -43,6 +49,38 @@ public interface LessonRepository extends JpaRepository<Lesson, String> {
             String cohortId,
             Collection<LessonStatus> statuses
     );
+
+    @Query("""
+            select distinct lesson.id
+            from Lesson lesson
+            join LessonParticipant participant on participant.lesson = lesson
+            where lesson.deliveryMode = :deliveryMode
+              and lesson.status <> :cancelledLesson
+              and lesson.endsAt <= :now
+              and participant.status = :expectedParticipation
+              and not exists (
+                  select attendance.id
+                  from AttendanceRecord attendance
+                  where attendance.lessonParticipant = participant
+              )
+            order by lesson.endsAt, lesson.id
+            """)
+    List<String> findOnlineAttendanceCandidateIds(
+            @Param("now") Instant now,
+            @Param("deliveryMode") DeliveryMode deliveryMode,
+            @Param("cancelledLesson") LessonStatus cancelledLesson,
+            @Param("expectedParticipation") ParticipationStatus expectedParticipation,
+            Pageable pageable
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select lesson
+            from Lesson lesson
+            join fetch lesson.instructorPerson
+            where lesson.id = :lessonId
+            """)
+    Optional<Lesson> findByIdForOnlineAttendance(@Param("lessonId") String lessonId);
 
     @Query("""
             select (count(lesson) > 0)

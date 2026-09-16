@@ -53,6 +53,7 @@ api:
       enabled: ${ACADEMIC_LIFECYCLE_ENABLED:true}
       interval: ${ACADEMIC_LIFECYCLE_INTERVAL:60000}
       reminder-batch-size: ${ACADEMIC_REMINDER_BATCH_SIZE:200}
+      attendance-batch-size: ${ACADEMIC_ATTENDANCE_BATCH_SIZE:200}
   document:
     lifecycle:
       enabled: ${DOCUMENT_LIFECYCLE_ENABLED:true}

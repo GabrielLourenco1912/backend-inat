@@ -32,6 +32,19 @@ public interface LessonParticipantRepository extends JpaRepository<LessonPartici
     @EntityGraph(attributePaths = {"learner", "sourceEnrollment"})
     List<LessonParticipant> findAllByLesson_Id(String lessonId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select participant
+            from LessonParticipant participant
+            where participant.lesson.id = :lessonId
+              and participant.status = :status
+            order by participant.id
+            """)
+    List<LessonParticipant> findAllForOnlineAttendance(
+            @Param("lessonId") String lessonId,
+            @Param("status") ParticipationStatus status
+    );
+
     Optional<LessonParticipant> findByLesson_IdAndLearner_Id(String lessonId, String learnerId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

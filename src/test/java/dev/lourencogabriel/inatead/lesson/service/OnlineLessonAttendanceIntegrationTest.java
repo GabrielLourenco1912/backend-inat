@@ -67,7 +67,7 @@ class OnlineLessonAttendanceIntegrationTest {
     private AttendanceRecordRepository attendanceRepository;
 
     @Test
-    void shouldPersistAttendanceOnlyAfterAllOnlineActivitiesAreDelivered() {
+    void shouldCreateAnAbsenceAtLessonEndAndUpdateItAfterTheLastDelivery() {
         String suffix = UUID.randomUUID().toString().replace("-", "");
         Person person = personRepository.save(person(suffix));
 
@@ -124,6 +124,18 @@ class OnlineLessonAttendanceIntegrationTest {
         ));
         service.recordWhenAllActivitiesAreDelivered(firstSubmission, user.getUlid());
         assertFalse(attendanceRepository.existsByLessonParticipant_Id(participant.getId()));
+
+        assertEquals(
+                1,
+                service.recordMissingExpectedAttendance(
+                        lesson.getId(),
+                        lesson.getEndsAt().plusSeconds(60)
+                )
+        );
+        AttendanceRecord absence = attendanceRepository
+                .findByLessonParticipant_Id(participant.getId())
+                .orElseThrow();
+        assertEquals(AttendanceStatus.ABSENT, absence.getStatus());
 
         ActivitySubmission secondSubmission = submissionRepository.save(submission(
                 secondActivity,

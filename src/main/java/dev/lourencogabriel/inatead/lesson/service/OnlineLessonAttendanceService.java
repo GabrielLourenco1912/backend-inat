@@ -8,6 +8,7 @@ import dev.lourencogabriel.inatead.lesson.model.Lesson;
 import dev.lourencogabriel.inatead.lesson.model.LessonParticipant;
 import dev.lourencogabriel.inatead.lesson.repository.AttendanceRecordRepository;
 import dev.lourencogabriel.inatead.lesson.repository.LessonParticipantRepository;
+import dev.lourencogabriel.inatead.lesson.repository.LessonRepository;
 import dev.lourencogabriel.inatead.shared.model.ActivityStatus;
 import dev.lourencogabriel.inatead.shared.model.AttendanceStatus;
 import dev.lourencogabriel.inatead.shared.model.DeliveryMode;
@@ -15,6 +16,7 @@ import dev.lourencogabriel.inatead.shared.model.LessonStatus;
 import dev.lourencogabriel.inatead.shared.model.ParticipationStatus;
 import dev.lourencogabriel.inatead.shared.model.SubmissionStatus;
 import dev.lourencogabriel.inatead.shared.persistence.EntityLookup;
+import dev.lourencogabriel.inatead.user.model.User;
 import dev.lourencogabriel.inatead.user.repository.UserRepository;
 import dev.lourencogabriel.inatead.web.exception.BusinessRuleException;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.Set;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -39,11 +42,14 @@ public class OnlineLessonAttendanceService {
     );
     private static final String AUTOMATIC_ATTENDANCE_NOTE =
             "Automatically recorded after all online lesson activities were submitted";
+    private static final String AUTOMATIC_ABSENCE_NOTE =
+            "Automatically recorded when the online lesson ended without all activities submitted";
 
     private final ActivityRepository activityRepository;
     private final ActivitySubmissionRepository submissionRepository;
     private final LessonParticipantRepository participantRepository;
     private final AttendanceRecordRepository attendanceRepository;
+    private final LessonRepository lessonRepository;
     private final UserRepository userRepository;
 
     @Transactional
@@ -86,12 +92,13 @@ public class OnlineLessonAttendanceService {
                         REQUIRED_ACTIVITY_STATUSES,
                         DELIVERED_SUBMISSION_STATUSES
                 );
-        if (deliveredActivities != requiredActivities
-                || attendanceRepository.existsByLessonParticipant_Id(participant.getId())) {
+        if (deliveredActivities != requiredActivities) {
             return;
         }
 
-        AttendanceRecord attendance = new AttendanceRecord();
+        AttendanceRecord attendance = attendanceRepository
+                .findByLessonParticipant_Id(participant.getId())
+                .orElseGet(AttendanceRecord::new);
         attendance.setLessonParticipant(participant);
         attendance.setRecordedByUser(EntityLookup.require(
                 userRepository,
@@ -101,8 +108,52 @@ public class OnlineLessonAttendanceService {
         attendance.setStatus(AttendanceStatus.PRESENT);
         attendance.setCheckInAt(lesson.getStartsAt());
         attendance.setCheckOutAt(lesson.getEndsAt());
-        attendance.setRecordedAt(Instant.now());
+        if (attendance.getRecordedAt() == null) {
+            attendance.setRecordedAt(Instant.now());
+        }
         attendance.setNotes(AUTOMATIC_ATTENDANCE_NOTE);
         attendanceRepository.save(attendance);
+    }
+
+    @Transactional
+    public int recordMissingExpectedAttendance(String lessonId, Instant recordedAt) {
+        Lesson lesson = lessonRepository.findByIdForOnlineAttendance(lessonId)
+                .orElseThrow(() -> new BusinessRuleException("Online lesson not found"));
+        if (lesson.getDeliveryMode() != DeliveryMode.ONLINE
+                || lesson.getStatus() == LessonStatus.CANCELLED
+                || lesson.getEndsAt().isAfter(recordedAt)) {
+            return 0;
+        }
+
+        User instructor = userRepository.findByPerson_Id(lesson.getInstructorPerson().getId())
+                .orElseThrow(() -> new BusinessRuleException(
+                        "The online lesson instructor has no user account"
+                ));
+        List<AttendanceRecord> missing = participantRepository.findAllForOnlineAttendance(
+                        lessonId,
+                        ParticipationStatus.EXPECTED
+                )
+                .stream()
+                .filter(participant -> attendanceRepository
+                        .findByLessonParticipant_Id(participant.getId())
+                        .isEmpty())
+                .map(participant -> absentRecord(participant, instructor, recordedAt))
+                .toList();
+        attendanceRepository.saveAll(missing);
+        return missing.size();
+    }
+
+    private AttendanceRecord absentRecord(
+            LessonParticipant participant,
+            User instructor,
+            Instant recordedAt
+    ) {
+        AttendanceRecord attendance = new AttendanceRecord();
+        attendance.setLessonParticipant(participant);
+        attendance.setRecordedByUser(instructor);
+        attendance.setStatus(AttendanceStatus.ABSENT);
+        attendance.setRecordedAt(recordedAt);
+        attendance.setNotes(AUTOMATIC_ABSENCE_NOTE);
+        return attendance;
     }
 }

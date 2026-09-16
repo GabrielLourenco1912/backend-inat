@@ -9,6 +9,7 @@ Esta política é específica do projeto e está centralizada em `project/Appren
 - Inclusão, edição/reativação e remanejamento de participantes aplicam a mesma validação. Havendo matrícula de origem, vale o contrato dessa matrícula; reposições e extras sem origem exigem contrato elegível do próprio aprendiz.
 - A mudança de presencial para online e a alteração da data/turma revalidam participantes não cancelados. Uma lista incompatível impede a alteração; ninguém é removido silenciosamente.
 - Não é permitido alterar a carga de um contrato de forma que invalide suas participações esperadas em aulas online agendadas/em andamento. Primeiro é necessário cancelar/remover essas participações. Aulas encerradas e participações canceladas não bloqueiam a mudança.
+- Ao atingir `lesson.endsAt`, o ciclo acadêmico registra falta para cada participante esperado de aula online que ainda não possui chamada. Uma entrega posterior de todas as atividades obrigatórias atualiza esse mesmo registro para presença, preservando sua identidade e impedindo duplicidade. Presenças lançadas antes do encerramento não são sobrescritas pelo scheduler.
 
 Não há migração destrutiva nem alteração automática de contratos, matrículas ou participações preexistentes.
 

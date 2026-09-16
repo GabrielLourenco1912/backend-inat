@@ -10,12 +10,15 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 public interface AttendanceRecordRepository extends JpaRepository<AttendanceRecord, String> {
 
     boolean existsByLessonParticipant_Id(String participantId);
 
     boolean existsByLessonParticipant_IdAndIdNot(String participantId, String id);
+
+    Optional<AttendanceRecord> findByLessonParticipant_Id(String participantId);
 
     List<AttendanceRecord> findAllByLessonParticipant_Lesson_IdOrderByRecordedAtAsc(
             String lessonId

@@ -10,9 +10,12 @@ import dev.lourencogabriel.inatead.lesson.model.Lesson;
 import dev.lourencogabriel.inatead.lesson.model.LessonParticipant;
 import dev.lourencogabriel.inatead.lesson.repository.AttendanceRecordRepository;
 import dev.lourencogabriel.inatead.lesson.repository.LessonParticipantRepository;
+import dev.lourencogabriel.inatead.lesson.repository.LessonRepository;
+import dev.lourencogabriel.inatead.person.model.Person;
 import dev.lourencogabriel.inatead.shared.model.ActivityStatus;
 import dev.lourencogabriel.inatead.shared.model.AttendanceStatus;
 import dev.lourencogabriel.inatead.shared.model.DeliveryMode;
+import dev.lourencogabriel.inatead.shared.model.LessonStatus;
 import dev.lourencogabriel.inatead.shared.model.ParticipationStatus;
 import dev.lourencogabriel.inatead.shared.model.SubmissionStatus;
 import dev.lourencogabriel.inatead.user.model.User;
@@ -28,6 +31,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -59,6 +63,8 @@ class OnlineLessonAttendanceServiceTest {
     private LessonParticipantRepository participantRepository;
     @Mock
     private AttendanceRecordRepository attendanceRepository;
+    @Mock
+    private LessonRepository lessonRepository;
     @Mock
     private UserRepository userRepository;
     @InjectMocks
@@ -115,8 +121,8 @@ class OnlineLessonAttendanceServiceTest {
                         REQUIRED_ACTIVITY_STATUSES,
                         DELIVERED_SUBMISSION_STATUSES
                 )).thenReturn(1L);
-        when(attendanceRepository.existsByLessonParticipant_Id("participant-1"))
-                .thenReturn(false);
+        when(attendanceRepository.findByLessonParticipant_Id("participant-1"))
+                .thenReturn(Optional.empty());
         when(userRepository.findById("actor-user")).thenReturn(Optional.of(actor));
 
         service.recordWhenAllActivitiesAreDelivered(this.submission, "actor-user");
@@ -177,8 +183,8 @@ class OnlineLessonAttendanceServiceTest {
                         REQUIRED_ACTIVITY_STATUSES,
                         DELIVERED_SUBMISSION_STATUSES
                 )).thenReturn(3L);
-        when(attendanceRepository.existsByLessonParticipant_Id("participant-1"))
-                .thenReturn(false);
+        when(attendanceRepository.findByLessonParticipant_Id("participant-1"))
+                .thenReturn(Optional.empty());
         when(userRepository.findById("actor-user")).thenReturn(Optional.of(actor));
 
         service.recordWhenAllActivitiesAreDelivered(this.submission, "actor-user");
@@ -202,7 +208,14 @@ class OnlineLessonAttendanceServiceTest {
     }
 
     @Test
-    void shouldKeepAnExistingAttendanceRecordUnchanged() {
+    void shouldUpdateAnExistingAbsenceWhenAllActivitiesAreDelivered() {
+        User actor = new User("Actor", "actor@example.com", "hash");
+        actor.setUlid("actor-user");
+        Instant originalRecordedAt = Instant.parse("2026-09-06T15:00:00Z");
+        AttendanceRecord existing = new AttendanceRecord();
+        existing.setLessonParticipant(this.participant);
+        existing.setStatus(AttendanceStatus.ABSENT);
+        existing.setRecordedAt(originalRecordedAt);
         when(participantRepository.findByLessonAndLearnerForUpdate(
                 "lesson-1",
                 "learner-1"
@@ -218,12 +231,49 @@ class OnlineLessonAttendanceServiceTest {
                         REQUIRED_ACTIVITY_STATUSES,
                         DELIVERED_SUBMISSION_STATUSES
                 )).thenReturn(2L);
-        when(attendanceRepository.existsByLessonParticipant_Id("participant-1"))
-                .thenReturn(true);
+        when(attendanceRepository.findByLessonParticipant_Id("participant-1"))
+                .thenReturn(Optional.of(existing));
+        when(userRepository.findById("actor-user")).thenReturn(Optional.of(actor));
 
         service.recordWhenAllActivitiesAreDelivered(this.submission, "actor-user");
 
-        verify(attendanceRepository, never()).save(any());
-        verifyNoInteractions(userRepository);
+        verify(attendanceRepository).save(existing);
+        assertEquals(AttendanceStatus.PRESENT, existing.getStatus());
+        assertEquals(this.lesson.getStartsAt(), existing.getCheckInAt());
+        assertEquals(this.lesson.getEndsAt(), existing.getCheckOutAt());
+        assertEquals(originalRecordedAt, existing.getRecordedAt());
+        assertSame(actor, existing.getRecordedByUser());
+    }
+
+    @Test
+    void shouldRecordAbsenceForExpectedParticipantsMissingAttendanceAfterTheLessonEnds() {
+        Person instructorPerson = new Person();
+        instructorPerson.setId("instructor-person");
+        this.lesson.setInstructorPerson(instructorPerson);
+        this.lesson.setStatus(LessonStatus.COMPLETED);
+        User instructor = new User("Instructor", "instructor@example.com", "hash");
+        when(lessonRepository.findByIdForOnlineAttendance("lesson-1"))
+                .thenReturn(Optional.of(this.lesson));
+        when(userRepository.findByPerson_Id("instructor-person"))
+                .thenReturn(Optional.of(instructor));
+        when(participantRepository.findAllForOnlineAttendance(
+                "lesson-1",
+                ParticipationStatus.EXPECTED
+        )).thenReturn(List.of(this.participant));
+        when(attendanceRepository.findByLessonParticipant_Id("participant-1"))
+                .thenReturn(Optional.empty());
+        Instant recordedAt = Instant.parse("2026-09-06T15:01:00Z");
+
+        int created = service.recordMissingExpectedAttendance("lesson-1", recordedAt);
+
+        assertEquals(1, created);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<AttendanceRecord>> captor = ArgumentCaptor.forClass(List.class);
+        verify(attendanceRepository).saveAll(captor.capture());
+        AttendanceRecord absence = captor.getValue().getFirst();
+        assertEquals(AttendanceStatus.ABSENT, absence.getStatus());
+        assertEquals(recordedAt, absence.getRecordedAt());
+        assertSame(this.participant, absence.getLessonParticipant());
+        assertSame(instructor, absence.getRecordedByUser());
     }
 }
