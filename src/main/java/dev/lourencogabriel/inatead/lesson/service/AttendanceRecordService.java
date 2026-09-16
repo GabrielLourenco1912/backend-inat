@@ -8,6 +8,7 @@ import dev.lourencogabriel.inatead.lesson.repository.LessonParticipantRepository
 import dev.lourencogabriel.inatead.lesson.repository.LessonRepository;
 import dev.lourencogabriel.inatead.shared.api.PageResponse;
 import dev.lourencogabriel.inatead.shared.model.AttendanceStatus;
+import dev.lourencogabriel.inatead.shared.model.ContractStatus;
 import dev.lourencogabriel.inatead.shared.model.LessonStatus;
 import dev.lourencogabriel.inatead.shared.model.ParticipationStatus;
 import dev.lourencogabriel.inatead.shared.persistence.EntityLookup;
@@ -21,11 +22,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 public class AttendanceRecordService {
+
+    private static final ZoneId APPLICATION_ZONE = ZoneId.of("America/Sao_Paulo");
 
     private final AttendanceRecordRepository attendanceRepository;
     private final LessonParticipantRepository participantRepository;
@@ -49,8 +54,34 @@ public class AttendanceRecordService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<AttendanceRecordDtos.Response> findAll(Pageable pageable) {
-        return PageResponse.from(attendanceRepository.findAll(pageable).map(this::toResponse));
+    public PageResponse<AttendanceRecordDtos.Response> findAll(
+            LocalDate startDate,
+            LocalDate endDate,
+            String learnerId,
+            String organizationId,
+            boolean activeContractsOnly,
+            String instructorPersonId,
+            Pageable pageable
+    ) {
+        if (startDate != null && endDate != null && endDate.isBefore(startDate)) {
+            throw new BusinessRuleException("endDate cannot precede startDate");
+        }
+        Instant startsAt = startDate == null
+                ? null
+                : startDate.atStartOfDay(APPLICATION_ZONE).toInstant();
+        Instant endsAtExclusive = endDate == null
+                ? null
+                : endDate.plusDays(1).atStartOfDay(APPLICATION_ZONE).toInstant();
+        return PageResponse.from(attendanceRepository.findAllFiltered(
+                startsAt,
+                endsAtExclusive,
+                normalizeId(learnerId),
+                normalizeId(organizationId),
+                activeContractsOnly,
+                ContractStatus.ACTIVE,
+                normalizeId(instructorPersonId),
+                pageable
+        ).map(this::toResponse));
     }
 
     @Transactional(readOnly = true)
@@ -157,6 +188,10 @@ public class AttendanceRecordService {
     private AttendanceRecord require(String id) {
         return attendanceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Attendance record", id));
+    }
+
+    private String normalizeId(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private AttendanceRecordDtos.Response toResponse(AttendanceRecord record) {

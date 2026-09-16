@@ -346,6 +346,12 @@ public class DomainAuthorization {
         return authentication.getName();
     }
 
+    @Transactional(readOnly = true)
+    public String personId(Authentication authentication) {
+        User user = currentUser(authentication);
+        return user == null || user.getPerson() == null ? null : user.getPerson().getId();
+    }
+
     private Set<String> roleCodes(User user) {
         if (user.getUserRoles() == null || user.getUserRoles().isEmpty()) {
             return Set.of();

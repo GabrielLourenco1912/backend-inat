@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.time.LocalDate;
 
 @RestController
 @RequestMapping("/api/attendance-records")
@@ -53,13 +55,34 @@ public class AttendanceRecordController {
     }
 
     @GetMapping
-    @PreAuthorize("@domainAuthorization.hasAnyRole(authentication, 'ADMIN')")
+    @PreAuthorize("@domainAuthorization.hasAnyRole(authentication, 'ADMIN') "
+            + "or (@domainAuthorization.hasAnyRole(authentication, 'INSTRUCTOR') "
+            + "and #learnerId != null and !#learnerId.isBlank() and #organizationId == null)")
     public ApiResponse<PageResponse<AttendanceRecordDtos.Response>> findAll(
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(required = false) String learnerId,
+            @RequestParam(required = false) String organizationId,
+            @RequestParam(defaultValue = "false") boolean activeContractsOnly,
             @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
+            Authentication authentication
     ) {
+        String instructorPersonId = authorization.hasAnyRole(authentication, "ADMIN")
+                ? null
+                : authorization.personId(authentication);
         return new ApiResponse<>(
-                service.findAll(PageRequest.of(page, size)),
+                service.findAll(
+                        startDate,
+                        endDate,
+                        learnerId,
+                        organizationId,
+                        activeContractsOnly,
+                        instructorPersonId,
+                        PageRequest.of(page, size)
+                ),
                 "Attendance records found"
         );
     }
