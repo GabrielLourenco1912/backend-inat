@@ -40,6 +40,11 @@ public class OrganizationService
     @Override
     protected void apply(Organization entity, OrganizationDtos.Request request) {
         if (entity.getId() != null) {
+            learnerRelationshipPolicy.validateOrganizationTaxId(
+                    entity.getId(),
+                    entity.getTaxId(),
+                    request.taxId()
+            );
             learnerRelationshipPolicy.validateOrganizationType(
                     entity.getId(),
                     request.organizationType()

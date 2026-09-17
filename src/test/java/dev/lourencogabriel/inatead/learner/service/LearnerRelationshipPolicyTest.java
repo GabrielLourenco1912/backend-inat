@@ -185,6 +185,16 @@ class LearnerRelationshipPolicyTest {
     }
 
     @Test
+    void shouldRejectTaxIdChangeForOrganizationReferencedByContract() {
+        when(contractRepository.existsByEmployer_Id("employer")).thenReturn(true);
+
+        assertThrows(
+                BusinessRuleException.class,
+                () -> policy.validateOrganizationTaxId("employer", "123", "456")
+        );
+    }
+
+    @Test
     void shouldRejectDeactivatingPersonWithLiveContract() {
         Learner learner = learner(LocalDate.of(2000, 1, 1), true);
         learner.getPerson().setStatus(RecordStatus.INACTIVE);

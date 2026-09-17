@@ -124,6 +124,22 @@ public class LearnerRelationshipPolicy {
         }
     }
 
+    public void validateOrganizationTaxId(
+            String organizationId,
+            String currentTaxId,
+            String requestedTaxId
+    ) {
+        if (currentTaxId.equals(requestedTaxId)) {
+            return;
+        }
+        if (contractRepository.existsByEmployer_Id(organizationId)
+                || contractRepository.existsBySchool_Id(organizationId)) {
+            throw new BusinessRuleException(
+                    "The tax ID of an organization referenced by a contract cannot be changed"
+            );
+        }
+    }
+
     private void validateExistingContractSchools(Learner learner) {
         if (learner.isHasCompletedHighSchool()) {
             return;

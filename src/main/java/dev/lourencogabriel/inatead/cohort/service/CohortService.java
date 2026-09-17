@@ -141,6 +141,10 @@ public class CohortService extends AbstractCrudService<Cohort, CohortDtos.Reques
         LocalDate previousStart = cohort.getStartDate();
         LocalDate previousEnd = cohort.getEndDate();
 
+        if (previousStatus != CohortStatus.PLANNED
+                && !cohort.getCode().equals(request.code().trim().toUpperCase(Locale.ROOT))) {
+            throw new BusinessRuleException("Cohort code can only be changed while the cohort is planned");
+        }
         validateTerminalCohortIsUnchanged(cohort, request);
         apply(cohort, request);
         validateStatusTransition(previousStatus, cohort.getStatus(), request.statusReason());

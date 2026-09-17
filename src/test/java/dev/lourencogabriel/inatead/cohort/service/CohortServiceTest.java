@@ -95,6 +95,19 @@ class CohortServiceTest {
     }
 
     @Test
+    void shouldRejectCodeChangeAfterCohortActivation() {
+        Cohort cohort = cohort(CohortStatus.ACTIVE);
+        when(cohortRepository.findByIdForUpdate("cohort")).thenReturn(Optional.of(cohort));
+        CohortDtos.Request changedCode = new CohortDtos.Request(
+                "NEW-CODE", "Administration", 1, "MORNING",
+                LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31),
+                null, CohortStatus.ACTIVE, null
+        );
+
+        assertThrows(BusinessRuleException.class, () -> service.update("cohort", changedCode, "admin"));
+    }
+
+    @Test
     void shouldCascadeCohortCancellationToEnrollmentsLessonsAndActivities() {
         Cohort cohort = cohort(CohortStatus.ACTIVE);
         Lesson lesson = new Lesson();
