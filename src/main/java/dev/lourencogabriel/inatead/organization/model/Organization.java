@@ -66,6 +66,9 @@ public class Organization extends AuditedEntity {
     @Column(name = "phone_number", length = 20, nullable = false)
     private String phoneNumber;
 
+    @Column(name = "attendance_closing_day")
+    private Integer attendanceClosingDay;
+
     @Enumerated(EnumType.STRING)
     @Column(length = 20, nullable = false)
     private RecordStatus status = RecordStatus.ACTIVE;

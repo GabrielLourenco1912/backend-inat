@@ -82,6 +82,7 @@ class AddressCompositionIntegrationTest {
                 "12345678000190",
                 "contact@example.com",
                 "41999999999",
+                20,
                 RecordStatus.ACTIVE
         ));
         String addressId = created.address().id();
@@ -99,6 +100,7 @@ class AddressCompositionIntegrationTest {
                         "12345678000190",
                         "contact@example.com",
                         "41999999999",
+                        20,
                         RecordStatus.ACTIVE
                 )
         );

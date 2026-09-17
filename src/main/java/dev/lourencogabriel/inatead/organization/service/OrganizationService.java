@@ -65,6 +65,7 @@ public class OrganizationService
         entity.setTaxId(request.taxId());
         entity.setContactEmail(request.contactEmail().trim().toLowerCase(Locale.ROOT));
         entity.setPhoneNumber(request.phoneNumber().trim());
+        entity.setAttendanceClosingDay(request.attendanceClosingDay());
         entity.setStatus(request.status());
     }
 
@@ -100,6 +101,7 @@ public class OrganizationService
                 entity.getTaxId(),
                 entity.getContactEmail(),
                 entity.getPhoneNumber(),
+                entity.getAttendanceClosingDay(),
                 entity.getStatus(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()

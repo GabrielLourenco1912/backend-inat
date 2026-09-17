@@ -171,7 +171,7 @@ class DocumentListingIntegrationTest {
     private Contract contract(Learner learner) {
         var organization = organizations.create(new OrganizationDtos.Request(null, address(), OrganizationType.EMPLOYER,
                 "Document employer", null, String.format("%014d", SEQUENCE.incrementAndGet()),
-                "employer@docs.test", "41999999999", RecordStatus.ACTIVE));
+                "employer@docs.test", "41999999999", null, RecordStatus.ACTIVE));
         Contract contract = new Contract();
         contract.setLearner(learner);
         contract.setEmployer(entityManager.find(Organization.class, organization.id()));

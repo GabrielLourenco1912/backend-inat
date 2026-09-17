@@ -5,6 +5,8 @@ import dev.lourencogabriel.inatead.shared.model.OrganizationType;
 import dev.lourencogabriel.inatead.shared.model.RecordStatus;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -26,6 +28,7 @@ public final class OrganizationDtos {
             @NotBlank @Pattern(regexp = "\\d{14}") String taxId,
             @NotBlank @Email @Size(max = 254) String contactEmail,
             @NotBlank @Size(max = 20) String phoneNumber,
+            @Min(1) @Max(31) Integer attendanceClosingDay,
             @NotNull RecordStatus status
     ) {
     }
@@ -40,6 +43,7 @@ public final class OrganizationDtos {
             String taxId,
             String contactEmail,
             String phoneNumber,
+            Integer attendanceClosingDay,
             RecordStatus status,
             Instant createdAt,
             Instant updatedAt
