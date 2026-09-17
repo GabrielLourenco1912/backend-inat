@@ -10,6 +10,7 @@ Esta política é específica do projeto e está centralizada em `project/Appren
 - A mudança de presencial para online e a alteração da data/turma revalidam participantes não cancelados. Uma lista incompatível impede a alteração; ninguém é removido silenciosamente.
 - Não é permitido alterar a carga de um contrato de forma que invalide suas participações esperadas em aulas online agendadas/em andamento. Primeiro é necessário cancelar/remover essas participações. Aulas encerradas e participações canceladas não bloqueiam a mudança.
 - Ao atingir `lesson.endsAt`, o ciclo acadêmico registra falta para cada participante esperado de aula online que ainda não possui chamada. Uma entrega posterior de todas as atividades obrigatórias atualiza esse mesmo registro para presença, preservando sua identidade e impedindo duplicidade. Presenças lançadas antes do encerramento não são sobrescritas pelo scheduler.
+- A empresa pode informar opcionalmente um dia mensal de fechamento de ponto. Para uma aula no dia do fechamento ou antes, todas as atividades precisam ter sido entregues até o fim desse dia no mesmo mês; para uma aula posterior, vale o fechamento do mês seguinte. O último dia do mês substitui configurações como dia 31 em meses menores. Sem configuração, a regra de entregas permanece ilimitada. Submissões posteriores continuam aceitas e armazenadas, mas não geram presença automática para aquele ciclo.
 
 Não há migração destrutiva nem alteração automática de contratos, matrículas ou participações preexistentes.
 

@@ -12,6 +12,7 @@ import dev.lourencogabriel.inatead.lesson.repository.AttendanceRecordRepository;
 import dev.lourencogabriel.inatead.lesson.repository.LessonParticipantRepository;
 import dev.lourencogabriel.inatead.lesson.repository.LessonRepository;
 import dev.lourencogabriel.inatead.person.model.Person;
+import dev.lourencogabriel.inatead.project.OnlineAttendanceClosingPolicy;
 import dev.lourencogabriel.inatead.shared.model.ActivityStatus;
 import dev.lourencogabriel.inatead.shared.model.AttendanceStatus;
 import dev.lourencogabriel.inatead.shared.model.DeliveryMode;
@@ -67,6 +68,8 @@ class OnlineLessonAttendanceServiceTest {
     private LessonRepository lessonRepository;
     @Mock
     private UserRepository userRepository;
+    @Mock
+    private OnlineAttendanceClosingPolicy attendanceClosingPolicy;
     @InjectMocks
     private OnlineLessonAttendanceService service;
 
@@ -162,6 +165,38 @@ class OnlineLessonAttendanceServiceTest {
         service.recordWhenAllActivitiesAreDelivered(this.submission, "actor-user");
 
         verify(attendanceRepository, never()).save(any());
+        verifyNoInteractions(userRepository);
+    }
+
+    @Test
+    void shouldOnlyCountDeliveriesBeforeTheEmployerClosingCutoff() {
+        Instant cutoff = Instant.parse("2026-09-21T03:00:00Z");
+        when(participantRepository.findByLessonAndLearnerForUpdate(
+                "lesson-1",
+                "learner-1"
+        )).thenReturn(Optional.of(this.participant));
+        when(activityRepository.countByLesson_IdAndStatusIn(
+                "lesson-1",
+                REQUIRED_ACTIVITY_STATUSES
+        )).thenReturn(1L);
+        when(attendanceClosingPolicy.submissionCutoffFor(this.participant))
+                .thenReturn(Optional.of(cutoff));
+        when(submissionRepository
+                .countByActivity_Lesson_IdAndLearner_IdAndActivity_StatusInAndStatusInAndSubmittedAtBefore(
+                        "lesson-1",
+                        "learner-1",
+                        REQUIRED_ACTIVITY_STATUSES,
+                        DELIVERED_SUBMISSION_STATUSES,
+                        cutoff
+                )).thenReturn(0L);
+
+        service.recordWhenAllActivitiesAreDelivered(this.submission, "actor-user");
+
+        verify(attendanceRepository, never()).save(any());
+        verify(submissionRepository, never())
+                .countByActivity_Lesson_IdAndLearner_IdAndActivity_StatusInAndStatusIn(
+                        any(), any(), any(), any()
+                );
         verifyNoInteractions(userRepository);
     }
 

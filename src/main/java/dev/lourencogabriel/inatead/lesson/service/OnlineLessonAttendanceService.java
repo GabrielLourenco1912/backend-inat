@@ -9,6 +9,7 @@ import dev.lourencogabriel.inatead.lesson.model.LessonParticipant;
 import dev.lourencogabriel.inatead.lesson.repository.AttendanceRecordRepository;
 import dev.lourencogabriel.inatead.lesson.repository.LessonParticipantRepository;
 import dev.lourencogabriel.inatead.lesson.repository.LessonRepository;
+import dev.lourencogabriel.inatead.project.OnlineAttendanceClosingPolicy;
 import dev.lourencogabriel.inatead.shared.model.ActivityStatus;
 import dev.lourencogabriel.inatead.shared.model.AttendanceStatus;
 import dev.lourencogabriel.inatead.shared.model.DeliveryMode;
@@ -51,6 +52,7 @@ public class OnlineLessonAttendanceService {
     private final AttendanceRecordRepository attendanceRepository;
     private final LessonRepository lessonRepository;
     private final UserRepository userRepository;
+    private final OnlineAttendanceClosingPolicy attendanceClosingPolicy;
 
     @Transactional
     public void recordWhenAllActivitiesAreDelivered(
@@ -85,12 +87,22 @@ public class OnlineLessonAttendanceService {
             return;
         }
 
-        long deliveredActivities = submissionRepository
+        Instant cutoff = attendanceClosingPolicy.submissionCutoffFor(participant).orElse(null);
+        long deliveredActivities = cutoff == null
+                ? submissionRepository
                 .countByActivity_Lesson_IdAndLearner_IdAndActivity_StatusInAndStatusIn(
                         lesson.getId(),
                         learnerId,
                         REQUIRED_ACTIVITY_STATUSES,
                         DELIVERED_SUBMISSION_STATUSES
+                )
+                : submissionRepository
+                .countByActivity_Lesson_IdAndLearner_IdAndActivity_StatusInAndStatusInAndSubmittedAtBefore(
+                        lesson.getId(),
+                        learnerId,
+                        REQUIRED_ACTIVITY_STATUSES,
+                        DELIVERED_SUBMISSION_STATUSES,
+                        cutoff
                 );
         if (deliveredActivities != requiredActivities) {
             return;

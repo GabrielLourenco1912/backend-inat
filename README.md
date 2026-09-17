@@ -177,9 +177,11 @@ Depois de uma entrega mudar para `SUBMITTED` ou `LATE`, o backend verifica a con
 - é necessário existir ao menos uma atividade `PUBLISHED` ou `CLOSED` na aula; atividades `DRAFT` e `CANCELLED` não entram no conjunto obrigatório;
 - cada atividade obrigatória precisa possuir uma entrega do aprendiz em `SUBMITTED`, `LATE` ou `GRADED`; `DRAFT` e `RETURNED` ainda não concluem o conjunto;
 - quando todas estiverem entregues, é criado um único `attendance_record` com estado `PRESENT`, `checkInAt` igual a `lesson.startsAt` e `checkOutAt` igual a `lesson.endsAt`;
+- quando a empresa do contrato informa `attendanceClosingDay`, só contam entregas feitas até o fim desse dia no ciclo da aula: aulas no dia do fechamento ou antes usam o mês atual, e aulas posteriores usam o mês seguinte. Dias inexistentes no mês são ajustados para o último dia;
+- sem `attendanceClosingDay`, todas as entregas continuam sendo consideradas, como antes. O limite afeta somente a presença automática e não impede nem altera submissões posteriores;
 - o usuário autenticado que realizou a última entrega fica registrado em `recordedByUser`;
 - o participante é bloqueado durante a verificação para impedir duplicidade em entregas concorrentes;
-- uma frequência preexistente, inclusive lançada manualmente, é preservada e nunca sobrescrita pela automação.
+- uma frequência preexistente é atualizada no mesmo registro quando a conclusão válida das atividades gera presença.
 
 O lançamento ou a correção manual de frequência é bloqueado enquanto a aula estiver `SCHEDULED`; aulas `IN_PROGRESS` e `COMPLETED` aceitam o registro. Essa restrição não se aplica à automação descrita acima.
 
