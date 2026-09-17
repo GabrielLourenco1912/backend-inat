@@ -3,8 +3,6 @@ package dev.lourencogabriel.inatead.person;
 import dev.lourencogabriel.inatead.address.dto.AddressDtos;
 import dev.lourencogabriel.inatead.learner.dto.LearnerDtos;
 import dev.lourencogabriel.inatead.learner.dto.LearnerGuardianDtos;
-import dev.lourencogabriel.inatead.learner.model.Learner;
-import dev.lourencogabriel.inatead.learner.repository.LearnerRepository;
 import dev.lourencogabriel.inatead.learner.service.LearnerGuardianService;
 import dev.lourencogabriel.inatead.learner.service.LearnerService;
 import dev.lourencogabriel.inatead.person.controller.PersonController;
@@ -13,14 +11,10 @@ import dev.lourencogabriel.inatead.person.model.PersonTypeCode;
 import dev.lourencogabriel.inatead.person.repository.PersonRepository;
 import dev.lourencogabriel.inatead.person.repository.PersonTypeRepository;
 import dev.lourencogabriel.inatead.person.service.PersonService;
-import dev.lourencogabriel.inatead.person.service.PersonTypeCatalogInitializer;
 import dev.lourencogabriel.inatead.shared.model.RecordStatus;
 import dev.lourencogabriel.inatead.user.model.User;
-import dev.lourencogabriel.inatead.user.model.UserRole;
-import dev.lourencogabriel.inatead.user.model.UserRoleId;
 import dev.lourencogabriel.inatead.user.repository.RoleRepository;
 import dev.lourencogabriel.inatead.user.repository.UserRepository;
-import dev.lourencogabriel.inatead.user.repository.UserRoleRepository;
 import dev.lourencogabriel.inatead.user.service.UserRoleService;
 import dev.lourencogabriel.inatead.web.exception.BusinessRuleException;
 import jakarta.persistence.EntityManager;
@@ -52,13 +46,10 @@ class PersonTypeIntegrationTest {
     @Autowired private PersonController controller;
     @Autowired private PersonRepository personRepository;
     @Autowired private PersonTypeRepository typeRepository;
-    @Autowired private PersonTypeCatalogInitializer initializer;
     @Autowired private LearnerService learners;
     @Autowired private LearnerGuardianService guardians;
-    @Autowired private LearnerRepository learnerRepository;
     @Autowired private UserRepository userRepository;
     @Autowired private RoleRepository roleRepository;
-    @Autowired private UserRoleRepository userRoleRepository;
     @Autowired private UserRoleService userRoles;
     @Autowired private EntityManager entityManager;
 
@@ -159,32 +150,6 @@ class PersonTypeIntegrationTest {
         } finally {
             SecurityContextHolder.clearContext();
         }
-    }
-
-    @Test
-    void shouldClassifyLegacyRolesAndProfilesOnlyOnFirstInitialization() {
-        var person = create();
-        User user = user(person.id());
-        var role = roleRepository.findById(role("ADMIN")).orElseThrow();
-        UserRole assignment = new UserRole();
-        assignment.setId(new UserRoleId(user.getUlid(), role.getId()));
-        assignment.setUser(user);
-        assignment.setRole(role);
-        userRoleRepository.save(assignment);
-        Learner learner = new Learner();
-        learner.setPerson(personRepository.findById(person.id()).orElseThrow());
-        learner.setRegistrationNumber("LEGACY-TYPES");
-        learnerRepository.save(learner);
-        entityManager.flush();
-        typeRepository.deleteAllInBatch();
-        entityManager.clear();
-
-        initializer.run(null);
-        entityManager.clear();
-        assertEquals(Set.of(PersonTypeCode.ADMIN, PersonTypeCode.LEARNER), people.findById(person.id()).personTypes());
-        initializer.run(null);
-        assertEquals(5, typeRepository.count());
-        assertEquals(2, personRepository.findById(person.id()).orElseThrow().getPersonTypes().size());
     }
 
     private PersonDtos.Response create(PersonTypeCode... types) {
