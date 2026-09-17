@@ -5,8 +5,10 @@ import dev.lourencogabriel.inatead.cohort.repository.CohortEnrollmentRepository;
 import dev.lourencogabriel.inatead.cohort.service.CohortEnrollmentLifecycleService;
 import dev.lourencogabriel.inatead.contract.dto.ContractDtos;
 import dev.lourencogabriel.inatead.contract.model.Contract;
+import dev.lourencogabriel.inatead.contract.model.ContractSchoolChange;
 import dev.lourencogabriel.inatead.contract.repository.ContractDocumentRepository;
 import dev.lourencogabriel.inatead.contract.repository.ContractRepository;
+import dev.lourencogabriel.inatead.contract.repository.ContractSchoolChangeRepository;
 import dev.lourencogabriel.inatead.learner.model.Learner;
 import dev.lourencogabriel.inatead.learner.repository.LearnerRepository;
 import dev.lourencogabriel.inatead.organization.model.Organization;
@@ -43,6 +45,7 @@ public class ContractService extends AbstractCrudService<Contract, ContractDtos.
     private final OrganizationRepository organizationRepository;
     private final CohortEnrollmentRepository enrollmentRepository;
     private final ContractDocumentRepository documentRepository;
+    private final ContractSchoolChangeRepository schoolChangeRepository;
     private final CohortEnrollmentLifecycleService enrollmentLifecycleService;
     private final LifecycleStatusHistoryService historyService;
     private final Clock clock;
@@ -54,6 +57,7 @@ public class ContractService extends AbstractCrudService<Contract, ContractDtos.
             OrganizationRepository organizationRepository,
             CohortEnrollmentRepository enrollmentRepository,
             ContractDocumentRepository documentRepository,
+            ContractSchoolChangeRepository schoolChangeRepository,
             CohortEnrollmentLifecycleService enrollmentLifecycleService,
             LifecycleStatusHistoryService historyService,
             Clock clock,
@@ -65,6 +69,7 @@ public class ContractService extends AbstractCrudService<Contract, ContractDtos.
         this.organizationRepository = organizationRepository;
         this.enrollmentRepository = enrollmentRepository;
         this.documentRepository = documentRepository;
+        this.schoolChangeRepository = schoolChangeRepository;
         this.enrollmentLifecycleService = enrollmentLifecycleService;
         this.historyService = historyService;
         this.clock = clock;
@@ -132,21 +137,33 @@ public class ContractService extends AbstractCrudService<Contract, ContractDtos.
             ContractDtos.Request request,
             String actorUserId
     ) {
-        requireLearnerForUpdate(request.learnerId());
+        Learner requestedLearner = requireLearnerForUpdate(request.learnerId());
+        Organization requestedEmployer = requireOrganization(request.employerId(), "Employer");
+        Organization requestedSchool = request.schoolId() == null || request.schoolId().isBlank()
+                ? null
+                : requireOrganization(request.schoolId(), "School");
         Contract contract = contractRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Contract", id));
         ContractStatus previousStatus = contract.getStatus();
         LocalDate previousEndDate = contract.getEndDate();
+        String previousSchoolId = organizationId(contract.getSchool());
 
         validateImmutableIdentity(contract, request);
         validateTerminalContractIsUnchanged(contract, request);
-        if (!contract.getStartDate().equals(request.startDate())) {
+        if (previousStatus != ContractStatus.DRAFT
+                && !contract.getStartDate().equals(request.startDate())) {
             throw new BusinessRuleException("Contract start date cannot be changed");
         }
         validateStatusTransition(previousStatus, request.status(), request.statusReason());
         validateEndDateChange(contract, previousEndDate, request);
         apprenticeshipPolicy.validateWorkloadChange(contract, request.weeklyWorkloadMinutes());
 
+        if (previousStatus == ContractStatus.DRAFT) {
+            contract.setLearner(requestedLearner);
+            contract.setEmployer(requestedEmployer);
+            contract.setStartDate(request.startDate());
+        }
+        contract.setSchool(requestedSchool);
         contract.setEndDate(effectiveEndDate(contract, previousStatus, request));
         contract.setMonthlySalary(request.monthlySalary());
         contract.setWeeklyWorkloadMinutes(request.weeklyWorkloadMinutes());
@@ -156,6 +173,10 @@ public class ContractService extends AbstractCrudService<Contract, ContractDtos.
 
         Contract saved = contractRepository.save(contract);
         Instant changedAt = clock.instant();
+        String newSchoolId = organizationId(saved.getSchool());
+        if (!Objects.equals(previousSchoolId, newSchoolId)) {
+            appendSchoolChange(saved, previousSchoolId, newSchoolId, actorUserId, changedAt);
+        }
         if (previousStatus != saved.getStatus()) {
             historyService.append(
                     LifecycleAggregateType.CONTRACT,
@@ -254,6 +275,7 @@ public class ContractService extends AbstractCrudService<Contract, ContractDtos.
         Contract contract = contractRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Contract", id));
         validateDelete(contract);
+        schoolChangeRepository.deleteAllByContract_Id(contract.getId());
         contractRepository.delete(contract);
     }
 
@@ -303,24 +325,31 @@ public class ContractService extends AbstractCrudService<Contract, ContractDtos.
                 entity.getWeeklyWorkloadMinutes(),
                 entity.getStatus(),
                 historyService.find(LifecycleAggregateType.CONTRACT, entity.getId()),
+                schoolChangeRepository
+                        .findAllByContract_IdOrderByChangedAtAscIdAsc(entity.getId())
+                        .stream()
+                        .map(change -> new ContractDtos.SchoolChangeResponse(
+                                change.getId(),
+                                change.getPreviousSchoolId(),
+                                change.getNewSchoolId(),
+                                change.getChangedByUserId(),
+                                change.getChangedAt()
+                        ))
+                        .toList(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
         );
     }
 
     private void validateImmutableIdentity(Contract contract, ContractDtos.Request request) {
+        if (contract.getStatus() == ContractStatus.DRAFT) {
+            return;
+        }
         if (!contract.getLearner().getId().equals(request.learnerId())) {
             throw new BusinessRuleException("learnerId cannot be changed");
         }
         if (!contract.getEmployer().getId().equals(request.employerId())) {
             throw new BusinessRuleException("employerId cannot be changed");
-        }
-        String currentSchoolId = contract.getSchool() == null ? null : contract.getSchool().getId();
-        String requestedSchoolId = request.schoolId() == null || request.schoolId().isBlank()
-                ? null
-                : request.schoolId();
-        if (!Objects.equals(currentSchoolId, requestedSchoolId)) {
-            throw new BusinessRuleException("schoolId cannot be changed");
         }
     }
 
@@ -333,11 +362,36 @@ public class ContractService extends AbstractCrudService<Contract, ContractDtos.
             return;
         }
         if (contract.getStatus() != request.status()
+                || !Objects.equals(organizationId(contract.getSchool()), normalizeId(request.schoolId()))
                 || !Objects.equals(contract.getEndDate(), request.endDate())
                 || contract.getMonthlySalary().compareTo(request.monthlySalary()) != 0
                 || contract.getWeeklyWorkloadMinutes() != request.weeklyWorkloadMinutes()) {
             throw new BusinessRuleException("Ended or cancelled contracts cannot be changed");
         }
+    }
+
+    private void appendSchoolChange(
+            Contract contract,
+            String previousSchoolId,
+            String newSchoolId,
+            String actorUserId,
+            Instant changedAt
+    ) {
+        ContractSchoolChange change = new ContractSchoolChange();
+        change.setContract(contract);
+        change.setPreviousSchoolId(previousSchoolId);
+        change.setNewSchoolId(newSchoolId);
+        change.setChangedByUserId(actorUserId);
+        change.setChangedAt(changedAt);
+        schoolChangeRepository.save(change);
+    }
+
+    private String organizationId(Organization organization) {
+        return organization == null ? null : organization.getId();
+    }
+
+    private String normalizeId(String value) {
+        return value == null || value.isBlank() ? null : value;
     }
 
     private void validateEndDateChange(

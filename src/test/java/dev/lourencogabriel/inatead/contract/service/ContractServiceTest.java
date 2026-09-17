@@ -5,8 +5,10 @@ import dev.lourencogabriel.inatead.cohort.repository.CohortEnrollmentRepository;
 import dev.lourencogabriel.inatead.cohort.service.CohortEnrollmentLifecycleService;
 import dev.lourencogabriel.inatead.contract.dto.ContractDtos;
 import dev.lourencogabriel.inatead.contract.model.Contract;
+import dev.lourencogabriel.inatead.contract.model.ContractSchoolChange;
 import dev.lourencogabriel.inatead.contract.repository.ContractDocumentRepository;
 import dev.lourencogabriel.inatead.contract.repository.ContractRepository;
+import dev.lourencogabriel.inatead.contract.repository.ContractSchoolChangeRepository;
 import dev.lourencogabriel.inatead.learner.model.Learner;
 import dev.lourencogabriel.inatead.learner.repository.LearnerRepository;
 import dev.lourencogabriel.inatead.organization.model.Organization;
@@ -63,6 +65,8 @@ class ContractServiceTest {
     @Mock
     private ContractDocumentRepository documentRepository;
     @Mock
+    private ContractSchoolChangeRepository schoolChangeRepository;
+    @Mock
     private CohortEnrollmentLifecycleService enrollmentLifecycleService;
     @Mock
     private LifecycleStatusHistoryService historyService;
@@ -81,6 +85,7 @@ class ContractServiceTest {
                 organizationRepository,
                 enrollmentRepository,
                 documentRepository,
+                schoolChangeRepository,
                 enrollmentLifecycleService,
                 historyService,
                 CLOCK,
@@ -93,6 +98,8 @@ class ContractServiceTest {
         lenient().when(organizationRepository.findById("employer"))
                 .thenReturn(Optional.of(employer));
         lenient().when(historyService.find(any(), any())).thenReturn(List.of());
+        lenient().when(schoolChangeRepository.findAllByContract_IdOrderByChangedAtAscIdAsc(any()))
+                .thenReturn(List.of());
     }
 
     @Test
@@ -222,6 +229,23 @@ class ContractServiceTest {
                 LocalDate.of(2026, 12, 31), new BigDecimal("1200.00"), 1500, ContractStatus.DRAFT, null);
 
         assertEquals(1500, service.create(request).weeklyWorkloadMinutes());
+    }
+
+    @Test
+    void shouldAllowAndRecordSchoolChangeOnActiveContract() {
+        Contract contract = existingContract(ContractStatus.ACTIVE, LocalDate.of(2026, 12, 31));
+        Organization school = organization("school", OrganizationType.SCHOOL);
+        when(organizationRepository.findById("school")).thenReturn(Optional.of(school));
+        stubUpdate(contract);
+
+        ContractDtos.Response response = service.update(
+                contract.getId(),
+                request("school", contract.getEndDate(), ContractStatus.ACTIVE, null),
+                "admin"
+        );
+
+        assertEquals("school", response.schoolId());
+        verify(schoolChangeRepository).save(any(ContractSchoolChange.class));
     }
 
     private void stubSave() {

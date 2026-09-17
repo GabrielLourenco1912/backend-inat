@@ -43,8 +43,18 @@ public final class ContractDtos {
             int weeklyWorkloadMinutes,
             ContractStatus status,
             List<LifecycleStatusHistoryResponse> statusHistory,
+            List<SchoolChangeResponse> schoolHistory,
             Instant createdAt,
             Instant updatedAt
+    ) {
+    }
+
+    public record SchoolChangeResponse(
+            String id,
+            String previousSchoolId,
+            String newSchoolId,
+            String changedByUserId,
+            Instant changedAt
     ) {
     }
 }
