@@ -148,6 +148,19 @@
         primary key (id)
     ) engine=InnoDB;
 
+    create table contact_messages (
+        created_at datetime(6) not null,
+        updated_at datetime(6) not null,
+        id varchar(26) not null,
+        phone varchar(30),
+        contact_type enum ('COMPANY','FAMILY_OR_GUARDIAN','OTHER','YOUTH_INTERESTED') not null,
+        status enum ('ARCHIVED','NEW','READ') not null,
+        name varchar(150) not null,
+        email varchar(254) not null,
+        message text not null,
+        primary key (id)
+    ) engine=InnoDB;
+
     create table document_types (
         id smallint not null auto_increment,
         code varchar(50) not null,
@@ -463,6 +476,12 @@
 
     create index idx_contracts_school_status
        on contracts (school_id, status);
+
+    create index idx_contact_messages_status_created
+       on contact_messages (status, created_at);
+
+    create index idx_contact_messages_type_created
+       on contact_messages (contact_type, created_at);
 
     alter table document_types
        add constraint uk_document_types_code unique (code);

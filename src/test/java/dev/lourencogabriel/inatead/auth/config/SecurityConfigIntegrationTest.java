@@ -45,4 +45,28 @@ class SecurityConfigIntegrationTest {
                 .andExpect(jsonPath("$.status").value("401 UNAUTHORIZED"))
                 .andExpect(jsonPath("$.message").value("Autenticação necessária."));
     }
+
+    @Test
+    void shouldAllowAnonymousContactMessageCreation() throws Exception {
+        this.mockMvc.perform(post("/api/contact-messages")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "Maria Silva",
+                                  "email": "maria@example.com",
+                                  "phone": "(41) 99999-9999",
+                                  "contactType": "YOUTH_INTERESTED",
+                                  "message": "Quero saber mais sobre os cursos."
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.status").value("NEW"));
+    }
+
+    @Test
+    void shouldRequireAuthenticationToListContactMessages() throws Exception {
+        this.mockMvc.perform(get("/api/contact-messages"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Autenticação necessária."));
+    }
 }
