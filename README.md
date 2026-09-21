@@ -284,7 +284,7 @@ Os endpoints existentes `POST /api/people`, `PUT /api/people/{id}` e suas respos
 - A concessão de qualquer role exige o tipo correspondente na pessoa. `GUARDIAN` não é uma role de acesso.
 - Um tipo não pode ser removido enquanto houver um perfil de aprendiz, vínculo de responsável, atribuição de instrutor em aula, função organizacional correspondente ou role que dependa dele. Essa verificação também considera vínculos históricos ainda cadastrados. As atribuições e a edição de tipos bloqueiam a pessoa durante a transação.
 
-Na primeira inicialização do catálogo, os registros anteriores recebem os tipos deduzidos de suas roles, perfis de aprendiz, vínculos de responsável, aulas e funções organizacionais correspondentes. A atualização é transacional e executada somente quando o catálogo ainda está vazio; reinícios seguintes preservam as escolhas administrativas. O esquema segue a configuração JPA de criação/atualização já utilizada pela aplicação.
+Na primeira inicialização do catálogo, os registros anteriores recebem os tipos deduzidos de suas roles, perfis de aprendiz, vínculos de responsável, aulas e funções organizacionais correspondentes. A atualização é transacional e executada somente quando o catálogo ainda está vazio; reinícios seguintes preservam as escolhas administrativas. O schema e os dados iniciais são versionados pelo Flyway; o Hibernate apenas valida sua compatibilidade com as entidades.
 
 ## Tecnologias
 
@@ -304,15 +304,22 @@ Na primeira inicialização do catálogo, os registros anteriores recebem os tip
 | `SPRING_DATASOURCE_URL` | Sim | URL JDBC do MySQL |
 | `SPRING_DATASOURCE_USERNAME` | Sim | Usuário do banco de dados |
 | `SPRING_DATASOURCE_PASSWORD` | Sim | Senha do banco de dados |
+| `SPRING_JPA_SHOW_SQL` | Não | Exibe o SQL do Hibernate; padrão: `false` |
 | `API_SECURITY_JWT_SECRET` | Sim | Chave de assinatura JWT com pelo menos 32 caracteres |
 | `API_SECURITY_JWT_ISSUER` | Sim | URL que identifica o emissor dos tokens |
+| `CORS_ALLOWED_ORIGINS` | Não | Origens exatas permitidas, separadas por vírgula; padrão local: `http://localhost:3000` |
 | `API_SECURITY_REFRESH_COOKIE_SECURE` | Não | Exige HTTPS no cookie de refresh; padrão: `true` |
+| `JAVA_TOOL_OPTIONS` | Não | Opções adicionais aplicadas pela JVM no container |
 | `EMAIL` | Sim | Endereço completo da caixa Hostinger, usado como usuário SMTP e remetente |
 | `EMAIL_PASS` | Sim | Senha da caixa de e-mail Hostinger |
 | `SMTP_HOST` | Não | Servidor SMTP; padrão: `smtp.hostinger.com` |
 | `SMTP_PORT` | Não | Porta SMTP; padrão: `465` |
 | `SMTP_SSL_ENABLED` | Não | Habilita SSL implícito; padrão: `true` |
 | `SMTP_STARTTLS_ENABLED` | Não | Habilita STARTTLS, normalmente com porta `587`; padrão: `false` |
+| `SMTP_STARTTLS_REQUIRED` | Não | Exige STARTTLS quando ele estiver habilitado; padrão: `false` |
+| `SMTP_CONNECTION_TIMEOUT` | Não | Timeout de conexão SMTP em milissegundos; padrão: `5000` |
+| `SMTP_READ_TIMEOUT` | Não | Timeout de leitura SMTP em milissegundos; padrão: `5000` |
+| `SMTP_WRITE_TIMEOUT` | Não | Timeout de escrita SMTP em milissegundos; padrão: `5000` |
 | `AUTH_CHALLENGE_TTL` | Não | Validade dos códigos de autenticação; padrão: `10m` |
 | `AUTH_CHALLENGE_MAX_ATTEMPTS` | Não | Tentativas permitidas por desafio; padrão: `5` |
 | `AUTH_ACCOUNT_LOCK_MAX_FAILED_ATTEMPTS` | Não | Falhas consecutivas de senha/MFA antes do bloqueio; padrão: `5` |
@@ -320,9 +327,12 @@ Na primeira inicialização do catálogo, os registros anteriores recebem os tip
 | `AUTH_ACCOUNT_LOCK_SCHEDULER_ENABLED` | Não | Habilita o desbloqueio automático agendado; padrão: `true` |
 | `AUTH_ACCOUNT_UNLOCK_INTERVAL` | Não | Intervalo do desbloqueio automático em milissegundos; padrão: `60000` |
 | `NOTIFICATION_EMAIL_ENABLED` | Não | Habilita o dispatcher de notificações por e-mail; padrão: `true` |
+| `NOTIFICATION_EMAIL_DISPATCH_DELAY` | Não | Intervalo do dispatcher de e-mails em milissegundos; padrão: `5000` |
+| `NOTIFICATION_EMAIL_BATCH_SIZE` | Não | Máximo de notificações processadas por ciclo; padrão: `50` |
 | `ACADEMIC_LIFECYCLE_ENABLED` | Não | Habilita o agendador de estados acadêmicos e lembretes; padrão: `true` |
 | `ACADEMIC_LIFECYCLE_INTERVAL` | Não | Intervalo em milissegundos entre execuções; padrão: `60000` |
 | `ACADEMIC_REMINDER_BATCH_SIZE` | Não | Máximo de atividades verificadas por ciclo para o lembrete; padrão: `200` (limite: `1000`) |
+| `ACADEMIC_ATTENDANCE_BATCH_SIZE` | Não | Máximo de aulas processadas por ciclo de fechamento de presença; padrão: `200` |
 | `DOCUMENT_LIFECYCLE_ENABLED` | Não | Habilita a expiração automática de documentos pessoais; padrão: `true` |
 | `DOCUMENT_LIFECYCLE_INTERVAL` | Não | Intervalo do ciclo documental em milissegundos; padrão: `60000` |
 | `DOCUMENT_LIFECYCLE_BATCH_SIZE` | Não | Máximo de documentos expirados por ciclo; padrão: `200` (limite: `1000`) |
