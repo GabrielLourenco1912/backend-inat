@@ -41,16 +41,19 @@ public class SecurityConfig {
     private final SecretKey secretKey;
     private final ApiAuthenticationEntryPoint authenticationEntryPoint;
     private final String issuer;
+    private final List<String> allowedOrigins;
 
     public SecurityConfig(
             @Value("${api.security.jwt.secret}") String jwtSecret,
             @Value("${api.security.jwt.issuer}") String issuer,
+            @Value("${api.security.cors.allowed-origins}") List<String> allowedOrigins,
             ApiAuthenticationEntryPoint authenticationEntryPoint
     ) {
         this.secretKey = new SecretKeySpec(
                 jwtSecret.getBytes(StandardCharsets.UTF_8),
                 "HmacSHA256"
         );
+        this.allowedOrigins = List.copyOf(allowedOrigins);
         this.issuer = issuer;
         this.authenticationEntryPoint = authenticationEntryPoint;
     }
@@ -108,7 +111,7 @@ public class SecurityConfig {
     @Bean
     CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:3000"));
+        configuration.setAllowedOrigins(this.allowedOrigins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
