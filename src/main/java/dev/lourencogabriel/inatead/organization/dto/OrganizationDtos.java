@@ -27,7 +27,10 @@ public final class OrganizationDtos {
             @Size(max = 180) String tradeName,
             @NotBlank @Pattern(regexp = "\\d{14}") String taxId,
             @NotBlank @Email @Size(max = 254) String contactEmail,
-            @NotBlank @Size(max = 20) String phoneNumber,
+            @NotBlank @Pattern(
+                    regexp = "[1-9]{2}(?:9\\d{8}|[2-5]\\d{7})",
+                    message = "Informe DDD e telefone sem formatação")
+            String phoneNumber,
             @Min(1) @Max(31) Integer attendanceClosingDay,
             @NotNull RecordStatus status
     ) {

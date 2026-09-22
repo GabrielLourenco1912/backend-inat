@@ -2,10 +2,7 @@ package dev.lourencogabriel.inatead.contact.dto;
 
 import dev.lourencogabriel.inatead.contact.model.ContactMessageStatus;
 import dev.lourencogabriel.inatead.contact.model.ContactMessageType;
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.*;
 
 import java.time.Instant;
 
@@ -17,7 +14,10 @@ public final class ContactMessageDtos {
     public record CreateRequest(
             @NotBlank @Size(max = 150) String name,
             @NotBlank @Email @Size(max = 254) String email,
-            @Size(max = 30) String phone,
+            @NotBlank @Pattern(
+                    regexp = "[1-9]{2}(?:9\\d{8}|[2-5]\\d{7})",
+                    message = "Informe DDD e telefone sem formatação")
+            String phone,
             @NotNull ContactMessageType contactType,
             @NotBlank @Size(max = 5000) String message
     ) {

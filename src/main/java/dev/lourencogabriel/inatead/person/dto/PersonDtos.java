@@ -25,7 +25,10 @@ public final class PersonDtos {
             @NotBlank @Size(max = 150) String fullName,
             @NotBlank @Pattern(regexp = "\\d{11}") String taxId,
             @Email @Size(max = 254) String contactEmail,
-            @NotBlank @Size(max = 20) String phoneNumber,
+            @NotBlank @Pattern(
+                    regexp = "[1-9]{2}(?:9\\d{8}|[2-5]\\d{7})",
+                    message = "Informe DDD e telefone sem formatação")
+            String phoneNumber,
             @NotNull @Past LocalDate birthDate,
             @Size(max = 30) String gender,
             @NotNull RecordStatus status,
