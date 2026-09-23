@@ -1,7 +1,10 @@
 package dev.lourencogabriel.inatead.notification.service;
 
 import dev.lourencogabriel.inatead.mail.EmailDeliveryException;
+import dev.lourencogabriel.inatead.mail.EmailLinkResolver;
+import dev.lourencogabriel.inatead.mail.EmailMessage;
 import dev.lourencogabriel.inatead.mail.EmailSender;
+import dev.lourencogabriel.inatead.mail.EmailTemplateRenderer;
 import dev.lourencogabriel.inatead.notification.model.Notification;
 import dev.lourencogabriel.inatead.notification.model.NotificationRecipient;
 import dev.lourencogabriel.inatead.notification.repository.NotificationRecipientRepository;
@@ -23,6 +26,9 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -37,6 +43,10 @@ class NotificationEmailDeliveryServiceTest {
     private NotificationRecipientRepository recipientRepository;
     @Mock
     private EmailSender emailSender;
+    @Mock
+    private EmailTemplateRenderer emailTemplateRenderer;
+    @Mock
+    private EmailLinkResolver emailLinkResolver;
 
     private NotificationEmailDeliveryService service;
 
@@ -45,6 +55,8 @@ class NotificationEmailDeliveryServiceTest {
         this.service = new NotificationEmailDeliveryService(
                 this.recipientRepository,
                 this.emailSender,
+                this.emailTemplateRenderer,
+                this.emailLinkResolver,
                 Clock.fixed(NOW, ZoneOffset.UTC)
         );
     }
@@ -52,16 +64,13 @@ class NotificationEmailDeliveryServiceTest {
     @Test
     void shouldSendEligibleEmailAndMarkItAsSent() {
         NotificationRecipient recipient = recipient();
+        prepareRenderedEmail();
         when(this.recipientRepository.findByIdForDelivery("recipient-1"))
                 .thenReturn(Optional.of(recipient));
 
         this.service.deliver("recipient-1");
 
-        verify(this.emailSender).send(
-                "recipient@example.com",
-                "Activity available",
-                "Olá, Recipient!\n\nComplete your activity.\n\nAcesse: /activities/1\n\nINAT EAD"
-        );
+        verify(this.emailSender).send(expectedMessage());
         assertEquals(NotificationDeliveryStatus.SENT, recipient.getDeliveryStatus());
         assertEquals(NOW, recipient.getSentAt());
         assertNull(recipient.getFailureReason());
@@ -71,11 +80,12 @@ class NotificationEmailDeliveryServiceTest {
     @Test
     void shouldRecordFailureWithoutPropagatingSmtpError() {
         NotificationRecipient recipient = recipient();
+        prepareRenderedEmail();
         when(this.recipientRepository.findByIdForDelivery("recipient-1"))
                 .thenReturn(Optional.of(recipient));
         doThrow(new EmailDeliveryException(new IllegalStateException("SMTP unavailable")))
                 .when(this.emailSender)
-                .send("recipient@example.com", "Activity available", "Olá, Recipient!\n\nComplete your activity.\n\nAcesse: /activities/1\n\nINAT EAD");
+                .send(expectedMessage());
 
         this.service.deliver("recipient-1");
 
@@ -94,11 +104,7 @@ class NotificationEmailDeliveryServiceTest {
 
         this.service.deliver("recipient-1");
 
-        verify(this.emailSender, never()).send(
-                "recipient@example.com",
-                "Activity available",
-                "Olá, Recipient!\n\nComplete your activity.\n\nAcesse: /activities/1\n\nINAT EAD"
-        );
+        verify(this.emailSender, never()).send(any(EmailMessage.class));
         verify(this.recipientRepository, never()).save(recipient);
     }
 
@@ -116,12 +122,25 @@ class NotificationEmailDeliveryServiceTest {
                 "Email delivery cancelled because the recipient account is not active",
                 recipient.getFailureReason()
         );
-        verify(this.emailSender, never()).send(
+        verify(this.emailSender, never()).send(any(EmailMessage.class));
+        verify(this.recipientRepository).save(recipient);
+    }
+
+    private void prepareRenderedEmail() {
+        when(this.emailLinkResolver.resolve("/activities/1"))
+                .thenReturn("https://portal.example.com/activities/1");
+        when(this.emailTemplateRenderer.render(eq("notification"), anyMap()))
+                .thenReturn("<html><body>Rendered notification</body></html>");
+    }
+
+    private EmailMessage expectedMessage() {
+        return new EmailMessage(
                 "recipient@example.com",
                 "Activity available",
-                "Olá, Recipient!\n\nComplete your activity.\n\nAcesse: /activities/1\n\nINAT EAD"
+                "Olá, Recipient!\n\nComplete your activity."
+                        + "\n\nAcesse: https://portal.example.com/activities/1\n\nINAT EAD",
+                "<html><body>Rendered notification</body></html>"
         );
-        verify(this.recipientRepository).save(recipient);
     }
 
     private NotificationRecipient recipient() {

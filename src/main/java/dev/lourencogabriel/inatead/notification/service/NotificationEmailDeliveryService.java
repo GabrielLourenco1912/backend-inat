@@ -1,7 +1,10 @@
 package dev.lourencogabriel.inatead.notification.service;
 
 import dev.lourencogabriel.inatead.mail.EmailDeliveryException;
+import dev.lourencogabriel.inatead.mail.EmailLinkResolver;
+import dev.lourencogabriel.inatead.mail.EmailMessage;
 import dev.lourencogabriel.inatead.mail.EmailSender;
+import dev.lourencogabriel.inatead.mail.EmailTemplateRenderer;
 import dev.lourencogabriel.inatead.notification.model.Notification;
 import dev.lourencogabriel.inatead.notification.model.NotificationRecipient;
 import dev.lourencogabriel.inatead.notification.repository.NotificationRecipientRepository;
@@ -16,6 +19,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -27,6 +32,8 @@ public class NotificationEmailDeliveryService {
 
     private final NotificationRecipientRepository recipientRepository;
     private final EmailSender emailSender;
+    private final EmailTemplateRenderer emailTemplateRenderer;
+    private final EmailLinkResolver emailLinkResolver;
     private final Clock clock;
 
     @Transactional
@@ -48,11 +55,18 @@ public class NotificationEmailDeliveryService {
 
         try {
             Notification notification = recipient.getNotification();
-            this.emailSender.send(
+            String actionUrl = this.emailLinkResolver.resolve(notification.getActionUrl());
+            String textBody = buildTextBody(recipient, actionUrl);
+            String htmlBody = this.emailTemplateRenderer.render(
+                    "notification",
+                    templateModel(recipient, actionUrl)
+            );
+            this.emailSender.send(new EmailMessage(
                     recipient.getRecipientUser().getEmail(),
                     notification.getTitle(),
-                    buildBody(recipient)
-            );
+                    textBody,
+                    htmlBody
+            ));
             Instant now = Instant.now(this.clock);
             recipient.setDeliveryStatus(NotificationDeliveryStatus.SENT);
             recipient.setSentAt(now);
@@ -80,17 +94,38 @@ public class NotificationEmailDeliveryService {
                 || notification.getExpiresAt().isAfter(now));
     }
 
-    private String buildBody(NotificationRecipient recipient) {
+    private String buildTextBody(NotificationRecipient recipient, String actionUrl) {
         Notification notification = recipient.getNotification();
         StringBuilder body = new StringBuilder()
                 .append("Olá, ")
                 .append(recipient.getRecipientUser().getName())
                 .append("!\n\n")
                 .append(notification.getMessage());
-        if (notification.getActionUrl() != null) {
-            body.append("\n\nAcesse: ").append(notification.getActionUrl());
+        if (actionUrl != null) {
+            body.append("\n\nAcesse: ").append(actionUrl);
         }
         body.append("\n\nINAT EAD");
         return body.toString();
+    }
+
+    private Map<String, Object> templateModel(
+            NotificationRecipient recipient,
+            String actionUrl
+    ) {
+        Notification notification = recipient.getNotification();
+        Map<String, Object> model = new HashMap<>();
+        model.put("subject", notification.getTitle());
+        model.put("preheader", summarize(notification.getMessage()));
+        model.put("recipientName", recipient.getRecipientUser().getName());
+        model.put("message", notification.getMessage());
+        model.put("actionUrl", actionUrl);
+        return model;
+    }
+
+    private String summarize(String value) {
+        String normalized = value.replaceAll("\\s+", " ").trim();
+        return normalized.length() <= 140
+                ? normalized
+                : normalized.substring(0, 137) + "...";
     }
 }

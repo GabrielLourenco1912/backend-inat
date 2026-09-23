@@ -292,6 +292,7 @@ Na primeira inicialização do catálogo, os registros anteriores recebem os tip
 - Spring Boot
 - Spring Security e OAuth 2.0 Resource Server
 - Spring Mail
+- FreeMarker para templates de e-mail
 - Spring Data JPA
 - MySQL
 - Maven
@@ -312,6 +313,7 @@ Na primeira inicialização do catálogo, os registros anteriores recebem os tip
 | `JAVA_TOOL_OPTIONS` | Não | Opções adicionais aplicadas pela JVM no container |
 | `EMAIL` | Sim | Endereço completo da caixa Hostinger, usado como usuário SMTP e remetente |
 | `EMAIL_PASS` | Sim | Senha da caixa de e-mail Hostinger |
+| `PORTAL_BASE_URL` | Não | Origem pública do portal usada para resolver links relativos dos e-mails; padrão local: `http://localhost:3000` |
 | `SMTP_HOST` | Não | Servidor SMTP; padrão: `smtp.hostinger.com` |
 | `SMTP_PORT` | Não | Porta SMTP; padrão: `465` |
 | `SMTP_SSL_ENABLED` | Não | Habilita SSL implícito; padrão: `true` |
@@ -348,6 +350,8 @@ Na primeira inicialização do catálogo, os registros anteriores recebem os tip
 | `CLAMAV_CONNECT_TIMEOUT` | Não | Timeout para conectar ao ClamAV; padrão: `3s` |
 | `CLAMAV_READ_TIMEOUT` | Não | Timeout para receber o resultado do ClamAV; padrão: `30s` |
 | `SERVER_PORT` | Não | Porta HTTP; padrão: `8080` |
+
+Os e-mails são enviados como `multipart/alternative`, com texto simples e HTML renderizado por templates FreeMarker. Links de notificações são limitados à mesma origem de `PORTAL_BASE_URL`.
 
 O padrão da Hostinger usa `smtp.hostinger.com:465` com SSL. Para a alternativa STARTTLS, configure `SMTP_PORT=587`, `SMTP_SSL_ENABLED=false`, `SMTP_STARTTLS_ENABLED=true` e `SMTP_STARTTLS_REQUIRED=true`.
 

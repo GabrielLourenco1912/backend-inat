@@ -5,7 +5,9 @@ import dev.lourencogabriel.inatead.auth.exception.InvalidAuthChallengeException;
 import dev.lourencogabriel.inatead.auth.model.AuthChallenge;
 import dev.lourencogabriel.inatead.auth.model.AuthChallengePurpose;
 import dev.lourencogabriel.inatead.auth.repository.AuthChallengeRepository;
+import dev.lourencogabriel.inatead.mail.EmailMessage;
 import dev.lourencogabriel.inatead.mail.EmailSender;
+import dev.lourencogabriel.inatead.mail.EmailTemplateRenderer;
 import dev.lourencogabriel.inatead.shared.model.UserAccountStatus;
 import dev.lourencogabriel.inatead.user.model.User;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,7 +35,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -49,6 +53,8 @@ class AuthChallengeServiceTest {
     private AuthChallengeRepository challengeRepository;
     @Mock
     private EmailSender emailSender;
+    @Mock
+    private EmailTemplateRenderer emailTemplateRenderer;
     @Mock
     private AccountSecurityService accountSecurityService;
 
@@ -66,6 +72,7 @@ class AuthChallengeServiceTest {
         this.service = new AuthChallengeService(
                 this.challengeRepository,
                 this.emailSender,
+                this.emailTemplateRenderer,
                 secretKey,
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 this.accountSecurityService,
@@ -74,6 +81,9 @@ class AuthChallengeServiceTest {
         );
         this.savedChallenge = new AtomicReference<>();
         this.emailBody = new AtomicReference<>();
+
+        when(this.emailTemplateRenderer.render(any(), anyMap()))
+                .thenReturn("<html><body>Rendered email</body></html>");
 
         when(this.challengeRepository.save(any(AuthChallenge.class))).thenAnswer(invocation -> {
             AuthChallenge challenge = invocation.getArgument(0);
@@ -84,9 +94,10 @@ class AuthChallengeServiceTest {
             return challenge;
         });
         doAnswer(invocation -> {
-            this.emailBody.set(invocation.getArgument(2));
+            EmailMessage message = invocation.getArgument(0);
+            this.emailBody.set(message.textBody());
             return null;
-        }).when(this.emailSender).send(any(), any(), any());
+        }).when(this.emailSender).send(any(EmailMessage.class));
     }
 
     @Test
@@ -111,11 +122,13 @@ class AuthChallengeServiceTest {
         assertEquals(64, challenge.getCodeDigest().length());
         assertEquals(32, challenge.getCodeNonce().length());
         verify(this.challengeRepository).invalidateActiveForUser(user.getUlid(), NOW);
-        verify(this.emailSender).send(
-                eq("test@example.com"),
-                eq("Seu código de acesso ao INAT EAD"),
-                any()
-        );
+        verify(this.emailSender).send(argThat(message ->
+                message.recipient().equals("test@example.com")
+                        && message.subject().equals("Seu código de acesso ao INAT EAD")
+                        && message.textBody().contains(code)
+                        && message.htmlBody().contains("Rendered email")
+        ));
+        verify(this.emailTemplateRenderer).render(eq("auth-challenge"), anyMap());
     }
 
     @Test
@@ -216,11 +229,11 @@ class AuthChallengeServiceTest {
         assertEquals(verifiedAt, user.getEmailVerifiedAt());
         assertEquals(NOW, challenge.getConsumedAt());
         verify(this.accountSecurityService).recordSuccessfulAuthentication(user);
-        verify(this.emailSender).send(
-                eq("test@example.com"),
-                eq("Redefina sua senha no INAT EAD"),
-                any()
-        );
+        verify(this.emailSender).send(argThat(message ->
+                message.recipient().equals("test@example.com")
+                        && message.subject().equals("Redefina sua senha no INAT EAD")
+                        && message.textBody().contains(issuedCode())
+        ));
     }
 
     @Test

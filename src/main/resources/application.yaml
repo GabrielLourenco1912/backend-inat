@@ -48,6 +48,7 @@ server:
 api:
   mail:
     from: ${EMAIL:}
+    portal-base-url: ${PORTAL_BASE_URL:http://localhost:3000}
   academic:
     lifecycle:
       enabled: ${ACADEMIC_LIFECYCLE_ENABLED:true}

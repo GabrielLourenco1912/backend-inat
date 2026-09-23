@@ -5,7 +5,9 @@ import dev.lourencogabriel.inatead.auth.exception.InvalidAuthChallengeException;
 import dev.lourencogabriel.inatead.auth.model.AuthChallenge;
 import dev.lourencogabriel.inatead.auth.model.AuthChallengePurpose;
 import dev.lourencogabriel.inatead.auth.repository.AuthChallengeRepository;
+import dev.lourencogabriel.inatead.mail.EmailMessage;
 import dev.lourencogabriel.inatead.mail.EmailSender;
+import dev.lourencogabriel.inatead.mail.EmailTemplateRenderer;
 import dev.lourencogabriel.inatead.shared.model.UserAccountStatus;
 import dev.lourencogabriel.inatead.user.model.User;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,6 +26,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.Locale;
+import java.util.Map;
 
 @Service
 public class AuthChallengeService {
@@ -35,6 +38,7 @@ public class AuthChallengeService {
 
     private final AuthChallengeRepository challengeRepository;
     private final EmailSender emailSender;
+    private final EmailTemplateRenderer emailTemplateRenderer;
     private final SecretKey secretKey;
     private final Clock clock;
     private final AccountSecurityService accountSecurityService;
@@ -45,6 +49,7 @@ public class AuthChallengeService {
     public AuthChallengeService(
             AuthChallengeRepository challengeRepository,
             EmailSender emailSender,
+            EmailTemplateRenderer emailTemplateRenderer,
             SecretKey secretKey,
             Clock clock,
             AccountSecurityService accountSecurityService,
@@ -59,6 +64,7 @@ public class AuthChallengeService {
         }
         this.challengeRepository = challengeRepository;
         this.emailSender = emailSender;
+        this.emailTemplateRenderer = emailTemplateRenderer;
         this.secretKey = secretKey;
         this.clock = clock;
         this.accountSecurityService = accountSecurityService;
@@ -90,11 +96,26 @@ public class AuthChallengeService {
         challenge.setRequestedIpAddress(truncate(ipAddress, MAX_IP_ADDRESS_LENGTH));
 
         AuthChallenge saved = this.challengeRepository.save(challenge);
-        this.emailSender.send(
-                challenge.getTargetEmail(),
-                subject(purpose),
-                body(user, purpose, code)
+        String subject = subject(purpose);
+        String textBody = body(user, purpose, code);
+        String htmlBody = this.emailTemplateRenderer.render(
+                "auth-challenge",
+                Map.of(
+                        "subject", subject,
+                        "preheader", preheader(purpose),
+                        "heading", heading(purpose),
+                        "recipientName", user.getName(),
+                        "action", action(purpose),
+                        "code", code,
+                        "expirationMinutes", expirationMinutes()
+                )
         );
+        this.emailSender.send(new EmailMessage(
+                challenge.getTargetEmail(),
+                subject,
+                textBody,
+                htmlBody
+        ));
 
         return toResponse(saved);
     }
@@ -220,11 +241,6 @@ public class AuthChallengeService {
     }
 
     private String body(User user, AuthChallengePurpose purpose, String code) {
-        String action = switch (purpose) {
-            case EMAIL_VERIFICATION -> "confirmar seu e-mail";
-            case MFA_LOGIN -> "concluir seu login";
-            case PASSWORD_RESET -> "redefinir sua senha";
-        };
         return """
                 Olá, %s!
 
@@ -236,10 +252,38 @@ public class AuthChallengeService {
                 Se você não solicitou este código, ignore esta mensagem.
                 """.formatted(
                 user.getName(),
-                action,
+                action(purpose),
                 code,
-                Math.max(1, this.challengeTtl.toMinutes())
+                expirationMinutes()
         );
+    }
+
+    private String action(AuthChallengePurpose purpose) {
+        return switch (purpose) {
+            case EMAIL_VERIFICATION -> "confirmar seu e-mail";
+            case MFA_LOGIN -> "concluir seu login";
+            case PASSWORD_RESET -> "redefinir sua senha";
+        };
+    }
+
+    private String heading(AuthChallengePurpose purpose) {
+        return switch (purpose) {
+            case EMAIL_VERIFICATION -> "Confirme seu e-mail";
+            case MFA_LOGIN -> "Confirme seu acesso";
+            case PASSWORD_RESET -> "Redefina sua senha";
+        };
+    }
+
+    private String preheader(AuthChallengePurpose purpose) {
+        return switch (purpose) {
+            case EMAIL_VERIFICATION -> "Código para confirmar seu e-mail no Portal INAT.";
+            case MFA_LOGIN -> "Código de uso único para acessar o Portal INAT.";
+            case PASSWORD_RESET -> "Código para redefinir sua senha no Portal INAT.";
+        };
+    }
+
+    private long expirationMinutes() {
+        return Math.max(1, this.challengeTtl.toMinutes());
     }
 
     private AuthChallengeResponse toResponse(AuthChallenge challenge) {

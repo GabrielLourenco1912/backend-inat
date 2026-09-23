@@ -1,11 +1,15 @@
 package dev.lourencogabriel.inatead.mail;
 
+import jakarta.mail.MessagingException;
+import jakarta.mail.internet.MimeMessage;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.MailException;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
+
+import java.nio.charset.StandardCharsets;
 
 @Component
 public class SmtpEmailSender implements EmailSender {
@@ -22,27 +26,36 @@ public class SmtpEmailSender implements EmailSender {
     }
 
     @Override
-    public void send(String recipient, String subject, String body) {
+    public void send(EmailMessage message) {
         if (!StringUtils.hasText(this.fromAddress)) {
             throw new EmailDeliveryException(
                     new IllegalStateException("The sender email is not configured")
             );
         }
-        if (!StringUtils.hasText(recipient)) {
+        if (message == null || !StringUtils.hasText(message.recipient())) {
             throw new EmailDeliveryException(
                     new IllegalArgumentException("The recipient email is required")
             );
         }
 
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom(this.fromAddress.trim());
-        message.setTo(recipient.trim());
-        message.setSubject(sanitizeSubject(subject));
-        message.setText(body == null ? "" : body);
-
         try {
-            this.mailSender.send(message);
-        } catch (MailException exception) {
+            MimeMessage mimeMessage = this.mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(
+                    mimeMessage,
+                    true,
+                    StandardCharsets.UTF_8.name()
+            );
+            helper.setValidateAddresses(true);
+            helper.setFrom(this.fromAddress.trim());
+            helper.setTo(message.recipient().trim());
+            helper.setSubject(sanitizeSubject(message.subject()));
+            helper.setText(
+                    message.textBody() == null ? "" : message.textBody(),
+                    message.htmlBody() == null ? "" : message.htmlBody()
+            );
+
+            this.mailSender.send(mimeMessage);
+        } catch (MessagingException | MailException exception) {
             throw new EmailDeliveryException(exception);
         }
     }
