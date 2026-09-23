@@ -54,7 +54,7 @@ class SecurityConfigIntegrationTest {
                                 {
                                   "name": "Maria Silva",
                                   "email": "maria@example.com",
-                                  "phone": "(41) 99999-9999",
+                                  "phone": "41999999999",
                                   "contactType": "YOUTH_INTERESTED",
                                   "message": "Quero saber mais sobre os cursos."
                                 }
