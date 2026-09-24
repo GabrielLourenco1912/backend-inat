@@ -52,3 +52,11 @@ insert into user_roles (role_id, granted_at, granted_by_user_id, user_id)
 select r.id, NOW(6), NULL, '1'
 from roles as r
 where r.code in ('ADMIN', 'LEARNER');
+
+insert into learners (has_completed_high_school,
+                      created_at,
+                      updated_at,
+                      id, person_id,
+                      registration_number,
+                      status
+) values (1, NOW(6), NOW(6), 1, 1, 1, 'ACTIVE')
