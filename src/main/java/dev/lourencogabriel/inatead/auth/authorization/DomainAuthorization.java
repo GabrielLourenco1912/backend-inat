@@ -18,6 +18,7 @@ import dev.lourencogabriel.inatead.shared.model.ActivityStatus;
 import dev.lourencogabriel.inatead.shared.model.OrganizationType;
 import dev.lourencogabriel.inatead.shared.model.SubmissionStatus;
 import dev.lourencogabriel.inatead.shared.model.UserAccountStatus;
+import dev.lourencogabriel.inatead.shared.time.BusinessTime;
 import dev.lourencogabriel.inatead.user.model.User;
 import dev.lourencogabriel.inatead.user.model.UserRole;
 import dev.lourencogabriel.inatead.user.model.SystemRoleCode;
@@ -373,7 +374,7 @@ public class DomainAuthorization {
                 && organizationMembershipRepository.existsActiveMembership(
                         user.getPerson().getId(),
                         organization.getId(),
-                        LocalDate.now()
+                        LocalDate.now(BusinessTime.ZONE)
                 );
     }
 

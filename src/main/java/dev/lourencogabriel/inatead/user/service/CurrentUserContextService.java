@@ -1,5 +1,6 @@
 package dev.lourencogabriel.inatead.user.service;
 
+import dev.lourencogabriel.inatead.shared.time.BusinessTime;
 import dev.lourencogabriel.inatead.learner.repository.LearnerRepository;
 import dev.lourencogabriel.inatead.organization.repository.OrganizationMembershipRepository;
 import dev.lourencogabriel.inatead.shared.model.OrganizationType;
@@ -34,7 +35,7 @@ public class CurrentUserContextService {
                 ? java.util.List.<String>of()
                 : this.membershipRepository.findActiveByPersonId(
                                 personId,
-                                LocalDate.now(this.clock)
+                                BusinessTime.today(this.clock)
                         ).stream()
                         .filter(membership -> membership.getOrganization().getOrganizationType()
                                 == OrganizationType.EMPLOYER)

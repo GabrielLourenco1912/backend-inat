@@ -18,6 +18,7 @@ import dev.lourencogabriel.inatead.person.model.Person;
 import dev.lourencogabriel.inatead.shared.model.ActivityStatus;
 import dev.lourencogabriel.inatead.shared.model.OrganizationType;
 import dev.lourencogabriel.inatead.shared.model.UserAccountStatus;
+import dev.lourencogabriel.inatead.shared.time.BusinessTime;
 import dev.lourencogabriel.inatead.user.model.Role;
 import dev.lourencogabriel.inatead.user.model.User;
 import dev.lourencogabriel.inatead.user.model.UserRole;
@@ -93,7 +94,7 @@ class DomainAuthorizationTest {
         when(organizationMembershipRepository.existsActiveMembership(
                 "person",
                 "employer",
-                LocalDate.now()
+                LocalDate.now(BusinessTime.ZONE)
         )).thenReturn(true);
 
         assertTrue(authorization.canAccessOrganization(authentication, "employer"));
@@ -104,7 +105,7 @@ class DomainAuthorizationTest {
         when(organizationMembershipRepository.existsActiveMembership(
                 "person",
                 "employer",
-                LocalDate.now()
+                LocalDate.now(BusinessTime.ZONE)
         )).thenReturn(false);
 
         assertFalse(authorization.canAccessOrganization(authentication, "employer"));

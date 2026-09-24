@@ -1,5 +1,6 @@
 package dev.lourencogabriel.inatead.cohort.service;
 
+import dev.lourencogabriel.inatead.shared.time.BusinessTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -29,7 +30,7 @@ public class TrainingLifecycleScheduler {
 
     @Scheduled(fixedDelayString = "${api.academic.lifecycle.interval:60000}")
     public void synchronizeTrainingStatuses() {
-        var summary = lifecycleService.updateStatuses(LocalDate.now(clock), clock.instant());
+        var summary = lifecycleService.updateStatuses(BusinessTime.today(clock), clock.instant());
         if (summary.hasChanges()) {
             LOGGER.info(
                     "Training lifecycle synchronized: contractsEnded={}, cohortsCompleted={}, "

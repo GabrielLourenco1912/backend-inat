@@ -158,7 +158,8 @@ class AuthControllerValidationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.message")
                         .value("Registration created; verification code sent"))
-                .andExpect(jsonPath("$.data.purpose").value("EMAIL_VERIFICATION"));
+                .andExpect(jsonPath("$.data.purpose").value("EMAIL_VERIFICATION"))
+                .andExpect(jsonPath("$.data.expiresAt").value("2026-09-07T14:42:10.123Z"));
 
         ArgumentCaptor<RegisterRequest> requestCaptor = ArgumentCaptor.forClass(RegisterRequest.class);
         verify(this.authService).register(

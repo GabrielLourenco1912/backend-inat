@@ -2,17 +2,17 @@ package dev.lourencogabriel.inatead.web.dto;
 
 import org.springframework.http.HttpStatus;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public record ApiResponse<T>(
-        LocalDateTime timestamp,
+        Instant timestamp,
         HttpStatus status,
         String message,
         T data
 ) {
     public ApiResponse(T data, String message, HttpStatus status) {
         this(
-                LocalDateTime.now(),
+                Instant.now(),
                 status,
                 message,
                 data
@@ -21,7 +21,7 @@ public record ApiResponse<T>(
 
     public ApiResponse(T data, String message) {
         this(
-                LocalDateTime.now(),
+                Instant.now(),
                 HttpStatus.OK,
                 message,
                 data

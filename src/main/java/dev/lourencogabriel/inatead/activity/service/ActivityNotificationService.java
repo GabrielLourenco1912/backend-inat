@@ -8,6 +8,7 @@ import dev.lourencogabriel.inatead.shared.model.NotificationAudienceType;
 import dev.lourencogabriel.inatead.shared.model.NotificationChannel;
 import dev.lourencogabriel.inatead.shared.model.NotificationPriority;
 import dev.lourencogabriel.inatead.shared.model.UserAccountStatus;
+import dev.lourencogabriel.inatead.shared.time.BusinessTime;
 import dev.lourencogabriel.inatead.user.model.User;
 import dev.lourencogabriel.inatead.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -38,12 +39,12 @@ public class ActivityNotificationService {
         String cohortId = activity.getLesson().getCohort().getId();
         if (this.userRepository.findActiveCohortRecipients(
                 cohortId,
-                LocalDate.now(this.clock)
+                BusinessTime.today(this.clock)
         ).isEmpty()) {
             return;
         }
 
-        String deadline = DEADLINE_FORMAT.withZone(this.clock.getZone())
+        String deadline = DEADLINE_FORMAT.withZone(BusinessTime.ZONE)
                 .format(activity.getDueAt());
         this.notificationService.create(
                 new NotificationDtos.CreateRequest(

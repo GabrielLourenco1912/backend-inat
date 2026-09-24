@@ -1,5 +1,6 @@
 package dev.lourencogabriel.inatead.cohort.service;
 
+import dev.lourencogabriel.inatead.shared.time.BusinessTime;
 import dev.lourencogabriel.inatead.activity.repository.ActivityRepository;
 import dev.lourencogabriel.inatead.cohort.dto.CohortDtos;
 import dev.lourencogabriel.inatead.cohort.model.Cohort;
@@ -184,7 +185,7 @@ public class CohortService extends AbstractCrudService<Cohort, CohortDtos.Reques
 
     @Override
     protected void validate(Cohort cohort, boolean creating) {
-        LocalDate today = LocalDate.now(clock);
+        LocalDate today = BusinessTime.today(clock);
         if (cohort.getEndDate() != null && cohort.getEndDate().isBefore(cohort.getStartDate())) {
             throw new BusinessRuleException("Cohort end date cannot precede start date");
         }
@@ -310,7 +311,7 @@ public class CohortService extends AbstractCrudService<Cohort, CohortDtos.Reques
             return;
         }
 
-        ZoneId zone = clock.getZone();
+        ZoneId zone = BusinessTime.ZONE;
         for (Lesson lesson : lessonRepository.findAllByCohort_Id(cohort.getId())) {
             LocalDate start = lesson.getStartsAt().atZone(zone).toLocalDate();
             LocalDate end = lesson.getEndsAt().atZone(zone).toLocalDate();
@@ -352,7 +353,7 @@ public class CohortService extends AbstractCrudService<Cohort, CohortDtos.Reques
             String detail,
             Instant changedAt
     ) {
-        LocalDate today = LocalDate.now(clock);
+        LocalDate today = BusinessTime.today(clock);
         enrollmentLifecycleService.cancelForCohort(
                 cohort.getId(),
                 today,

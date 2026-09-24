@@ -1,5 +1,6 @@
 package dev.lourencogabriel.inatead.lesson.service;
 
+import dev.lourencogabriel.inatead.shared.time.BusinessTime;
 import dev.lourencogabriel.inatead.project.ApprenticeshipPolicy;
 import dev.lourencogabriel.inatead.activity.repository.ActivityRepository;
 import dev.lourencogabriel.inatead.cohort.repository.CohortRepository;
@@ -306,7 +307,7 @@ public class LessonService extends AbstractCrudService<Lesson, LessonDtos.Reques
     }
 
     private LocalDate lessonDate(Lesson lesson) {
-        return lesson.getStartsAt().atZone(clock.getZone()).toLocalDate();
+        return BusinessTime.date(lesson.getStartsAt());
     }
 
     @org.springframework.transaction.annotation.Transactional(readOnly = true)

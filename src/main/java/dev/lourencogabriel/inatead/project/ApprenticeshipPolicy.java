@@ -1,5 +1,6 @@
 package dev.lourencogabriel.inatead.project;
 
+import dev.lourencogabriel.inatead.shared.time.BusinessTime;
 import dev.lourencogabriel.inatead.contract.model.Contract;
 import dev.lourencogabriel.inatead.contract.repository.ContractRepository;
 import dev.lourencogabriel.inatead.lesson.model.Lesson;
@@ -62,7 +63,7 @@ public class ApprenticeshipPolicy {
                     var source = participant.getSourceEnrollment();
                     return source != null
                             ? source.getContract().getId().equals(contract.getId())
-                            : coversDate(contract, participant.getLesson().getStartsAt().atZone(clock.getZone()).toLocalDate());
+                            : coversDate(contract, BusinessTime.date(participant.getLesson().getStartsAt()));
                 });
         if (assignedOnline) {
             throw new BusinessRuleException(

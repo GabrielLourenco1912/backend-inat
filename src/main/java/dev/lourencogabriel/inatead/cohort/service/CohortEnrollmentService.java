@@ -1,5 +1,6 @@
 package dev.lourencogabriel.inatead.cohort.service;
 
+import dev.lourencogabriel.inatead.shared.time.BusinessTime;
 import dev.lourencogabriel.inatead.cohort.dto.CohortEnrollmentDtos;
 import dev.lourencogabriel.inatead.cohort.model.Cohort;
 import dev.lourencogabriel.inatead.cohort.model.CohortEnrollment;
@@ -144,7 +145,7 @@ public class CohortEnrollmentService extends AbstractCrudService<
             enrollment.setStatus(previousStatus);
             lifecycleService.cancelDirectly(
                     enrollment,
-                    LocalDate.now(clock),
+                    BusinessTime.today(clock),
                     clock.instant(),
                     actorUserId,
                     request.statusReason()
@@ -172,7 +173,7 @@ public class CohortEnrollmentService extends AbstractCrudService<
     protected void validate(CohortEnrollment entity, boolean creating) {
         Contract contract = entity.getContract();
         Cohort cohort = entity.getCohort();
-        LocalDate today = LocalDate.now(clock);
+        LocalDate today = BusinessTime.today(clock);
 
         if (entity.getEndDate() != null && entity.getEndDate().isBefore(entity.getStartDate())) {
             throw new BusinessRuleException("Enrollment end date cannot precede start date");

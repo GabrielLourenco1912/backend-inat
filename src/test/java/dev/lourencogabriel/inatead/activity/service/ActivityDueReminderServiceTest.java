@@ -25,7 +25,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -58,7 +58,7 @@ class ActivityDueReminderServiceTest {
 
     @BeforeEach
     void setUp() {
-        Clock clock = Clock.fixed(NOW, ZoneId.of("America/Sao_Paulo"));
+        Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
         service = new ActivityDueReminderService(
                 activityRepository,
                 userRepository,
@@ -99,6 +99,10 @@ class ActivityDueReminderServiceTest {
         assertEquals("cohort-1", request.audience().targetId());
         assertEquals(NotificationPriority.HIGH, request.priority());
         assertEquals(DUE_AT, request.expiresAt());
+        assertEquals(
+                "Faltam até três horas para o encerramento da atividade. Prazo: 10/09/2026 às 12:00.",
+                request.message()
+        );
         assertNull(request.scheduledAt());
         assertEquals(
                 Set.of(NotificationChannel.IN_APP, NotificationChannel.EMAIL),

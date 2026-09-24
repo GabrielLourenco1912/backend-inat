@@ -9,15 +9,14 @@ import org.springframework.stereotype.Component;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
-import java.time.ZoneId;
 import java.util.Optional;
+
+import static dev.lourencogabriel.inatead.shared.time.BusinessTime.ZONE;
 
 /** INAT-specific attendance cut-off derived from the participant's employer. */
 @Component
 @RequiredArgsConstructor
 public class OnlineAttendanceClosingPolicy {
-
-    private static final ZoneId APPLICATION_ZONE = ZoneId.of("America/Sao_Paulo");
 
     private final ContractRepository contractRepository;
 
@@ -31,7 +30,7 @@ public class OnlineAttendanceClosingPolicy {
         }
 
         LocalDate lessonDate = participant.getLesson().getStartsAt()
-                .atZone(APPLICATION_ZONE)
+                .atZone(ZONE)
                 .toLocalDate();
         int closingDay = contract.getEmployer().getAttendanceClosingDay();
         YearMonth closingMonth = YearMonth.from(lessonDate);
@@ -39,12 +38,12 @@ public class OnlineAttendanceClosingPolicy {
         if (lessonDate.isAfter(closingDate)) {
             closingDate = closingDate(closingMonth.plusMonths(1), closingDay);
         }
-        return Optional.of(closingDate.plusDays(1).atStartOfDay(APPLICATION_ZONE).toInstant());
+        return Optional.of(closingDate.plusDays(1).atStartOfDay(ZONE).toInstant());
     }
 
     private Optional<Contract> findContractForLesson(LessonParticipant participant) {
         LocalDate lessonDate = participant.getLesson().getStartsAt()
-                .atZone(APPLICATION_ZONE)
+                .atZone(ZONE)
                 .toLocalDate();
         return contractRepository
                 .findAllByLearner_IdOrderByStartDateDesc(participant.getLearner().getId())

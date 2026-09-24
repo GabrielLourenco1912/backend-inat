@@ -1,5 +1,6 @@
 package dev.lourencogabriel.inatead.document.service;
 
+import dev.lourencogabriel.inatead.shared.time.BusinessTime;
 import dev.lourencogabriel.inatead.document.dto.PersonDocumentDtos;
 import dev.lourencogabriel.inatead.document.model.PersonDocument;
 import dev.lourencogabriel.inatead.document.model.PersonDocumentStatusChangeReason;
@@ -161,7 +162,7 @@ public class PersonDocumentService {
             throw new BusinessRuleException("Document type is not allowed for person documents");
         }
 
-        LocalDate today = LocalDate.now(clock);
+        LocalDate today = BusinessTime.today(clock);
         if (document.getIssuedOn() != null && document.getIssuedOn().isAfter(today)) {
             throw new BusinessRuleException("Document issue date cannot be in the future");
         }

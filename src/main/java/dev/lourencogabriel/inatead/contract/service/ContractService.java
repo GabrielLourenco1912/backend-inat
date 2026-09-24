@@ -1,5 +1,6 @@
 package dev.lourencogabriel.inatead.contract.service;
 
+import dev.lourencogabriel.inatead.shared.time.BusinessTime;
 import dev.lourencogabriel.inatead.project.ApprenticeshipPolicy;
 import dev.lourencogabriel.inatead.cohort.repository.CohortEnrollmentRepository;
 import dev.lourencogabriel.inatead.cohort.service.CohortEnrollmentLifecycleService;
@@ -194,7 +195,7 @@ public class ContractService extends AbstractCrudService<Contract, ContractDtos.
                 && previousStatus != ContractStatus.CANCELLED) {
             enrollmentLifecycleService.cancelForContract(
                     saved.getId(),
-                    LocalDate.now(clock),
+                    BusinessTime.today(clock),
                     changedAt,
                     actorUserId,
                     "Contract cancelled: " + request.statusReason().trim()
@@ -232,7 +233,7 @@ public class ContractService extends AbstractCrudService<Contract, ContractDtos.
             throw new BusinessRuleException("Contract start date cannot precede the learner birth date");
         }
 
-        LocalDate today = LocalDate.now(clock);
+        LocalDate today = BusinessTime.today(clock);
         if (creating && contract.getEndDate() != null && !contract.getEndDate().isAfter(today)) {
             throw new BusinessRuleException("A new contract end date must be in the future");
         }
@@ -404,7 +405,7 @@ public class ContractService extends AbstractCrudService<Contract, ContractDtos.
             return;
         }
 
-        LocalDate today = LocalDate.now(clock);
+        LocalDate today = BusinessTime.today(clock);
         boolean cancellingToday = request.status() == ContractStatus.CANCELLED
                 && !contract.getStartDate().isAfter(today)
                 && today.equals(requestedEndDate);
@@ -428,7 +429,7 @@ public class ContractService extends AbstractCrudService<Contract, ContractDtos.
             ContractStatus previousStatus,
             ContractDtos.Request request
     ) {
-        LocalDate today = LocalDate.now(clock);
+        LocalDate today = BusinessTime.today(clock);
         if (request.status() == ContractStatus.CANCELLED
                 && previousStatus != ContractStatus.CANCELLED
                 && !contract.getStartDate().isAfter(today)) {

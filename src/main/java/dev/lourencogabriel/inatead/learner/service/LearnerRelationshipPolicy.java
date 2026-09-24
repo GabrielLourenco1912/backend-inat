@@ -1,5 +1,6 @@
 package dev.lourencogabriel.inatead.learner.service;
 
+import dev.lourencogabriel.inatead.shared.time.BusinessTime;
 import dev.lourencogabriel.inatead.contract.model.Contract;
 import dev.lourencogabriel.inatead.contract.repository.ContractRepository;
 import dev.lourencogabriel.inatead.learner.model.Learner;
@@ -37,7 +38,7 @@ public class LearnerRelationshipPolicy {
 
     public void validateGuardianEligibility(Person guardian) {
         PersonTypeRules.requireType(guardian, PersonTypeCode.GUARDIAN);
-        if (isMinorAt(guardian.getBirthDate(), LocalDate.now(clock))) {
+        if (isMinorAt(guardian.getBirthDate(), BusinessTime.today(clock))) {
             throw new BusinessRuleException("A guardian must be at least 18 years old");
         }
     }
@@ -180,7 +181,7 @@ public class LearnerRelationshipPolicy {
     }
 
     private boolean isMinorToday(Learner learner) {
-        return isMinorAt(learner.getPerson().getBirthDate(), LocalDate.now(clock));
+        return isMinorAt(learner.getPerson().getBirthDate(), BusinessTime.today(clock));
     }
 
     private boolean isMinorAt(LocalDate birthDate, LocalDate referenceDate) {

@@ -23,14 +23,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.List;
+
+import static dev.lourencogabriel.inatead.shared.time.BusinessTime.ZONE;
 
 @Service
 @RequiredArgsConstructor
 public class AttendanceRecordService {
-
-    private static final ZoneId APPLICATION_ZONE = ZoneId.of("America/Sao_Paulo");
 
     private final AttendanceRecordRepository attendanceRepository;
     private final LessonParticipantRepository participantRepository;
@@ -68,10 +67,10 @@ public class AttendanceRecordService {
         }
         Instant startsAt = startDate == null
                 ? null
-                : startDate.atStartOfDay(APPLICATION_ZONE).toInstant();
+                : startDate.atStartOfDay(ZONE).toInstant();
         Instant endsAtExclusive = endDate == null
                 ? null
-                : endDate.plusDays(1).atStartOfDay(APPLICATION_ZONE).toInstant();
+                : endDate.plusDays(1).atStartOfDay(ZONE).toInstant();
         return PageResponse.from(attendanceRepository.findAllFiltered(
                 startsAt,
                 endsAtExclusive,

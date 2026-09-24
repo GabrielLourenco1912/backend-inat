@@ -23,7 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -53,7 +53,7 @@ class ActivityNotificationServiceTest {
         this.service = new ActivityNotificationService(
                 this.notificationService,
                 this.userRepository,
-                Clock.fixed(NOW, ZoneId.of("America/Sao_Paulo"))
+                Clock.fixed(NOW, ZoneOffset.UTC)
         );
     }
 
@@ -78,6 +78,10 @@ class ActivityNotificationServiceTest {
         assertEquals("ACTIVITY", request.contextType());
         assertEquals("activity-1", request.contextId());
         assertEquals(activity.getAvailableAt(), request.scheduledAt());
+        assertEquals(
+                "Uma nova atividade foi publicada. Prazo para envio: 04/09/2026 às 11:00.",
+                request.message()
+        );
         assertNull(request.expiresAt());
         assertEquals(
                 Set.of(NotificationChannel.IN_APP, NotificationChannel.EMAIL),

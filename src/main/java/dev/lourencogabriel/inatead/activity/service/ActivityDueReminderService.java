@@ -10,6 +10,7 @@ import dev.lourencogabriel.inatead.shared.model.NotificationAudienceType;
 import dev.lourencogabriel.inatead.shared.model.NotificationChannel;
 import dev.lourencogabriel.inatead.shared.model.NotificationPriority;
 import dev.lourencogabriel.inatead.shared.model.SubmissionStatus;
+import dev.lourencogabriel.inatead.shared.time.BusinessTime;
 import dev.lourencogabriel.inatead.user.model.User;
 import dev.lourencogabriel.inatead.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -56,7 +57,7 @@ public class ActivityDueReminderService {
         }
 
         String cohortId = activity.getLesson().getCohort().getId();
-        LocalDate referenceDate = LocalDate.ofInstant(now, clock.getZone());
+        LocalDate referenceDate = BusinessTime.date(now);
         List<User> pendingLearners = userRepository
                 .findActiveCohortRecipientsWithoutDeliveredSubmission(
                         cohortId,
@@ -67,7 +68,7 @@ public class ActivityDueReminderService {
 
         boolean notificationCreated = !pendingLearners.isEmpty();
         if (notificationCreated) {
-            String deadline = DEADLINE_FORMAT.withZone(clock.getZone())
+            String deadline = DEADLINE_FORMAT.withZone(BusinessTime.ZONE)
                     .format(activity.getDueAt());
             notificationService.createForCohortRecipients(
                     new NotificationDtos.CreateRequest(

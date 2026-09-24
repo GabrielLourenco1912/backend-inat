@@ -1,5 +1,6 @@
 package dev.lourencogabriel.inatead.lesson.service;
 
+import dev.lourencogabriel.inatead.shared.time.BusinessTime;
 import dev.lourencogabriel.inatead.project.ApprenticeshipPolicy;
 import dev.lourencogabriel.inatead.cohort.model.CohortEnrollment;
 import dev.lourencogabriel.inatead.cohort.repository.CohortEnrollmentRepository;
@@ -287,7 +288,7 @@ public class LessonParticipantService {
     }
 
     private LocalDate lessonDate(Lesson lesson) {
-        return lesson.getStartsAt().atZone(clock.getZone()).toLocalDate();
+        return BusinessTime.date(lesson.getStartsAt());
     }
 
     private LessonParticipant require(String id) {

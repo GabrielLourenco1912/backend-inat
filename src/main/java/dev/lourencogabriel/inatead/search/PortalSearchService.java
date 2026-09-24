@@ -1,5 +1,6 @@
 package dev.lourencogabriel.inatead.search;
 
+import dev.lourencogabriel.inatead.shared.time.BusinessTime;
 import dev.lourencogabriel.inatead.auth.authorization.DomainAuthorization;
 import dev.lourencogabriel.inatead.person.service.PersonService;
 import dev.lourencogabriel.inatead.person.model.Person;
@@ -37,7 +38,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDate;
 import java.time.Clock;
-import java.time.ZoneId;
 import java.util.*;
 
 @Service
@@ -97,7 +97,7 @@ public class PortalSearchService {
         if (!admin) {
             if (personId == null) throw new AccessDeniedException("Person required");
             params.put("person", personId);
-            params.put("today", LocalDate.now());
+            params.put("today", BusinessTime.today(clock));
             String managed = "select m.organization.id from OrganizationMembership m where m.person.id = :person and m.status = 'ACTIVE' and m.startDate <= :today and (m.endDate is null or m.endDate >= :today) and m.organization.organizationType = 'EMPLOYER'";
             boolean manager = roleCodes.contains("EMPLOYER_MANAGER");
             boolean instructor = roleCodes.contains("INSTRUCTOR");
@@ -174,7 +174,7 @@ public class PortalSearchService {
         if (!expected.equals(resource)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Purpose does not match resource");
         switch (purpose) {
             case "guardian" -> {
-                var today = LocalDate.now(clock);
+                var today = BusinessTime.today(clock);
                 var cutoff = today.minusYears(18);
                 // plusYears(18), used by the domain policy, maps February 29 to February 28.
                 if (!cutoff.plusDays(1).plusYears(18).isAfter(today)) cutoff = cutoff.plusDays(1);
@@ -191,7 +191,7 @@ public class PortalSearchService {
                     params.put("lesson", contextId);
                     where.add("not exists (select p.id from LessonParticipant p where p.lesson.id = :lesson and p.learner = e)");
                     if (lesson.getDeliveryMode() == DeliveryMode.ONLINE) {
-                        params.put("lessonDate", lesson.getStartsAt().atZone(ZoneId.of("America/Sao_Paulo")).toLocalDate());
+                        params.put("lessonDate", BusinessTime.date(lesson.getStartsAt()));
                         where.add("exists (select c.id from Contract c where c.learner = e and c.status = 'ACTIVE' and c.weeklyWorkloadMinutes = 1800 and c.startDate <= :lessonDate and (c.endDate is null or c.endDate >= :lessonDate))");
                     }
                 }

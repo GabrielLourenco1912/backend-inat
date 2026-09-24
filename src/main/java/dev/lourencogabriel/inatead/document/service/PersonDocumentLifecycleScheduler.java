@@ -1,5 +1,6 @@
 package dev.lourencogabriel.inatead.document.service;
 
+import dev.lourencogabriel.inatead.shared.time.BusinessTime;
 import dev.lourencogabriel.inatead.document.repository.PersonDocumentRepository;
 import dev.lourencogabriel.inatead.shared.model.DocumentVerificationStatus;
 import org.slf4j.Logger;
@@ -46,7 +47,7 @@ public class PersonDocumentLifecycleScheduler {
 
     @Scheduled(fixedDelayString = "${api.document.lifecycle.interval:60000}")
     public void expireDocuments() {
-        LocalDate today = LocalDate.now(clock);
+        LocalDate today = BusinessTime.today(clock);
         Instant changedAt = Instant.now(clock);
         List<String> candidates = documentRepository.findExpirationCandidateIds(
                 DocumentVerificationStatus.VERIFIED,

@@ -23,6 +23,7 @@ O backend contém a autenticação JWT existente e a API do modelo educacional o
 - entregas de atividades, anexos, notificações e estado por destinatário/canal.
 
 As tabelas usam nomes em inglês, chaves ULID nos agregados principais e instantes em UTC.
+O bean `Clock` e os campos de instante nas respostas da API, inclusive `timestamp` e `expiresAt`, usam UTC. A API serializa esses campos em ISO 8601 com `Z`; a apresentação em São Paulo é feita na interface. Regras baseadas em datas civis usam `America/Sao_Paulo` explicitamente.
 
 ## Autorização
 
@@ -66,7 +67,7 @@ Duas aulas se sobrepõem quando uma começa antes do término da outra e termina
 - ao alterar a turma ou a data de uma aula, as matrículas de origem de todos os participantes ativos já vinculados são revalidadas;
 - aulas e participações canceladas são desconsideradas.
 
-As datas civis da aula, da matrícula e do remanejo são calculadas no fuso do relógio da aplicação (`America/Sao_Paulo`), e não em UTC. Uma aula aberta só pode pertencer a uma turma `ACTIVE`.
+As datas civis da aula, da matrícula e do remanejo são calculadas em `America/Sao_Paulo`, independentemente do relógio UTC. Uma aula aberta só pode pertencer a uma turma `ACTIVE`.
 
 Cada aula pode informar `externalLessonUrl`, independentemente da modalidade. O campo é opcional, aceita no máximo 2.048 caracteres e representa o conteúdo externo reproduzível da aula. `meetingUrl` também é opcional, inclusive em aulas `ONLINE`, e aceita no máximo 512 caracteres. Quando preenchidos, ambos os campos precisam conter uma URL com esquema `http://` ou `https://` e host válido.
 

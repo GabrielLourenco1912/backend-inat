@@ -1,5 +1,6 @@
 package dev.lourencogabriel.inatead.notification.service;
 
+import dev.lourencogabriel.inatead.shared.time.BusinessTime;
 import dev.lourencogabriel.inatead.cohort.repository.CohortRepository;
 import dev.lourencogabriel.inatead.notification.dto.NotificationDtos;
 import dev.lourencogabriel.inatead.notification.model.Notification;
@@ -257,7 +258,7 @@ public class NotificationService {
                 notification.setAudienceId(targetId);
                 yield userRepository.findActiveCohortRecipients(
                         targetId,
-                        LocalDate.now(clock)
+                        BusinessTime.today(clock)
                 );
             }
             case ALL -> {

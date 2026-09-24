@@ -1,5 +1,6 @@
 package dev.lourencogabriel.inatead.learner.service;
 
+import dev.lourencogabriel.inatead.shared.time.BusinessTime;
 import dev.lourencogabriel.inatead.learner.dto.LearnerDtos;
 import dev.lourencogabriel.inatead.learner.dto.LearnerGuardianDtos;
 import dev.lourencogabriel.inatead.learner.dto.LearnerOnboardingDtos;
@@ -93,7 +94,7 @@ public class LearnerOnboardingService {
             }
         }
 
-        boolean minor = learnerBirthDate.plusYears(18).isAfter(LocalDate.now(clock));
+        boolean minor = learnerBirthDate.plusYears(18).isAfter(BusinessTime.today(clock));
         boolean hasLegalGuardian = guardians.stream()
                 .anyMatch(LearnerOnboardingDtos.Guardian::legalGuardian);
         if (minor && !hasLegalGuardian) {
