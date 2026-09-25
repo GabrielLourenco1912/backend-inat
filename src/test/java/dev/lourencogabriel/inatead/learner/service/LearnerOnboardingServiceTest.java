@@ -6,12 +6,14 @@ import dev.lourencogabriel.inatead.learner.dto.LearnerGuardianDtos;
 import dev.lourencogabriel.inatead.learner.dto.LearnerOnboardingDtos;
 import dev.lourencogabriel.inatead.person.dto.PersonDtos;
 import dev.lourencogabriel.inatead.person.model.PersonTypeCode;
+import dev.lourencogabriel.inatead.person.model.PersonType;
 import dev.lourencogabriel.inatead.person.model.Person;
 import dev.lourencogabriel.inatead.person.repository.PersonRepository;
 import dev.lourencogabriel.inatead.person.service.PersonService;
 import dev.lourencogabriel.inatead.shared.model.RecordStatus;
 import dev.lourencogabriel.inatead.web.exception.BusinessRuleException;
 import dev.lourencogabriel.inatead.web.exception.ResourceConflictException;
+import dev.lourencogabriel.inatead.web.exception.ResourceNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -201,6 +203,78 @@ class LearnerOnboardingServiceTest {
         );
 
         verifyNoInteractions(personRepository, personService, learnerService, learnerGuardianService);
+    }
+
+    @Test
+    void shouldCreateLearnerFromTypedExistingPersonWithoutChangingPerson() {
+        Person person = existingPerson(LocalDate.of(2000, 1, 1), PersonTypeCode.LEARNER);
+        when(personRepository.findByIdForUpdate(person.getId())).thenReturn(Optional.of(person));
+        when(personService.findById(person.getId()))
+                .thenReturn(personResponse(person.getId(), personRequest(person.getTaxId(), person.getBirthDate())));
+        when(learnerService.create(any(LearnerDtos.Request.class)))
+                .thenReturn(learnerResponse("learner", person.getId()));
+
+        LearnerOnboardingDtos.Response response = service.fromPerson(person.getId(), existingRequest(List.of()));
+
+        assertFalse(response.personCreated());
+        assertEquals(person.getId(), response.person().id());
+        assertEquals("learner", response.learner().id());
+        verify(learnerService).create(new LearnerDtos.Request(
+                person.getId(), "MAT-001", false, RecordStatus.ACTIVE
+        ));
+        verify(personService, never()).create(any());
+        verify(personService, never()).update(any(), any());
+    }
+
+    @Test
+    void shouldRejectExistingPersonWithoutLearnerType() {
+        Person person = existingPerson(LocalDate.of(2000, 1, 1), PersonTypeCode.GUARDIAN);
+        when(personRepository.findByIdForUpdate(person.getId())).thenReturn(Optional.of(person));
+
+        BusinessRuleException error = assertThrows(BusinessRuleException.class,
+                () -> service.fromPerson(person.getId(), existingRequest(List.of())));
+
+        assertEquals("The person must have the LEARNER person type", error.getMessage());
+        verifyNoInteractions(personService, learnerService, learnerGuardianService);
+    }
+
+    @Test
+    void shouldRequireLegalGuardianWhenExistingPersonIsMinor() {
+        Person person = existingPerson(LocalDate.of(2010, 1, 1), PersonTypeCode.LEARNER);
+        when(personRepository.findByIdForUpdate(person.getId())).thenReturn(Optional.of(person));
+
+        assertThrows(BusinessRuleException.class,
+                () -> service.fromPerson(person.getId(), existingRequest(List.of())));
+
+        verifyNoInteractions(personService, learnerService, learnerGuardianService);
+    }
+
+    @Test
+    void shouldReportMissingPersonBeforeCreatingLearner() {
+        when(personRepository.findByIdForUpdate("missing")).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class,
+                () -> service.fromPerson("missing", existingRequest(List.of())));
+
+        verifyNoInteractions(personService, learnerService, learnerGuardianService);
+    }
+
+    private Person existingPerson(LocalDate birthDate, PersonTypeCode type) {
+        Person person = new Person();
+        person.setId("existing-person");
+        person.setTaxId("12345678909");
+        person.setBirthDate(birthDate);
+        person.getPersonTypes().add(new PersonType(type));
+        return person;
+    }
+
+    private LearnerOnboardingDtos.ExistingPersonRequest existingRequest(
+            List<LearnerOnboardingDtos.Guardian> guardians
+    ) {
+        return new LearnerOnboardingDtos.ExistingPersonRequest(
+                new LearnerOnboardingDtos.LearnerProfile("MAT-001", false, RecordStatus.ACTIVE),
+                guardians
+        );
     }
 
     private LearnerOnboardingDtos.Request request(

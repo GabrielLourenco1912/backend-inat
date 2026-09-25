@@ -22,6 +22,13 @@ public final class LearnerOnboardingDtos {
     ) {
     }
 
+    public record ExistingPersonRequest(
+            @NotNull @Valid LearnerProfile learner,
+            @NotNull @Size(max = 10)
+            List<@NotNull @Valid Guardian> guardians
+    ) {
+    }
+
     public record LearnerProfile(
             @NotBlank @Size(max = 30) String registrationNumber,
             boolean hasCompletedHighSchool,

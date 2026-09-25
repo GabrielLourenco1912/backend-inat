@@ -6,10 +6,13 @@ import dev.lourencogabriel.inatead.learner.dto.LearnerGuardianDtos;
 import dev.lourencogabriel.inatead.learner.dto.LearnerOnboardingDtos;
 import dev.lourencogabriel.inatead.person.dto.PersonDtos;
 import dev.lourencogabriel.inatead.person.model.Person;
+import dev.lourencogabriel.inatead.person.model.PersonTypeCode;
 import dev.lourencogabriel.inatead.person.repository.PersonRepository;
 import dev.lourencogabriel.inatead.person.service.PersonService;
+import dev.lourencogabriel.inatead.person.service.PersonTypeRules;
 import dev.lourencogabriel.inatead.web.exception.BusinessRuleException;
 import dev.lourencogabriel.inatead.web.exception.ResourceConflictException;
+import dev.lourencogabriel.inatead.web.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,7 +40,32 @@ public class LearnerOnboardingService {
         validateGuardians(request.person().birthDate(), guardians);
 
         ResolvedPerson resolvedPerson = resolvePerson(request.person());
-        LearnerOnboardingDtos.LearnerProfile profile = request.learner();
+        return createLearner(resolvedPerson, request.learner(), guardians);
+    }
+
+    @Transactional
+    public LearnerOnboardingDtos.Response fromPerson(
+            String personId,
+            LearnerOnboardingDtos.ExistingPersonRequest request
+    ) {
+        Person person = personRepository.findByIdForUpdate(personId)
+                .orElseThrow(() -> new ResourceNotFoundException("Person", personId));
+        PersonTypeRules.requireType(person, PersonTypeCode.LEARNER);
+        List<LearnerOnboardingDtos.Guardian> guardians = List.copyOf(request.guardians());
+        validateGuardians(person.getBirthDate(), guardians);
+
+        return createLearner(
+                new ResolvedPerson(personService.findById(personId), false),
+                request.learner(),
+                guardians
+        );
+    }
+
+    private LearnerOnboardingDtos.Response createLearner(
+            ResolvedPerson resolvedPerson,
+            LearnerOnboardingDtos.LearnerProfile profile,
+            List<LearnerOnboardingDtos.Guardian> guardians
+    ) {
         LearnerDtos.Response learner = learnerService.create(new LearnerDtos.Request(
                 resolvedPerson.person().id(),
                 profile.registrationNumber(),

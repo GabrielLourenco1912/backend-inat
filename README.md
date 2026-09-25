@@ -267,7 +267,9 @@ Em instalações que já possuam a restrição antiga `uk_files_storage_key`, el
 
 ### Onboarding de aprendizes
 
-`POST /api/learner-onboardings` é a única rota para criar um perfil de aprendiz. Ela cria o perfil de pessoa, incluindo seu endereço, e o perfil de aprendiz, além de vincular os responsáveis em uma única transação. Se o CPF já existir, a pessoa é reutilizada sem ter seus dados sobrescritos; a data de nascimento informada deve coincidir com o cadastro existente. Aprendizes menores de 18 anos devem receber ao menos um vínculo marcado como responsável legal.
+`POST /api/learner-onboardings` cria a pessoa, incluindo seu endereço, e o perfil de aprendiz, além de vincular os responsáveis em uma única transação. Se o CPF já existir, a pessoa é reutilizada sem ter seus dados sobrescritos; a data de nascimento informada deve coincidir com o cadastro existente. Aprendizes menores de 18 anos devem receber ao menos um vínculo marcado como responsável legal.
+
+`POST /api/people/{personId}/learner` cria o perfil para uma pessoa já cadastrada. O corpo contém `learner` (matrícula, escolaridade e situação) e `guardians` (lista de responsáveis), como no onboarding, mas não contém `person`. A pessoa deve existir e já possuir o tipo `LEARNER`; o endpoint não altera seus dados nem seus tipos. A mesma regra de responsável legal para menores e a transação única se aplicam. A resposta inclui `person`, `learner`, `guardians` e `personCreated: false`. Ambas as rotas são exclusivas de `ADMIN`.
 
 O cadastro de pessoa enviado no onboarding deve incluir `LEARNER` em `personTypes`. Se o CPF já existir, a pessoa cadastrada também precisa ter esse tipo; o onboarding não altera sua classificação implicitamente. As pessoas usadas como responsáveis precisam existir previamente, ter o tipo `GUARDIAN` e ao menos 18 anos. As atualizações de pessoa, aprendiz e vínculo de responsável não podem tornar essas regras inválidas, e o último responsável legal de um aprendiz menor não pode ser removido ou desmarcado. Os endpoints individuais de aprendizes permanecem disponíveis somente para consulta, atualização e exclusão administrativa; `POST /api/learners` não existe.
 
