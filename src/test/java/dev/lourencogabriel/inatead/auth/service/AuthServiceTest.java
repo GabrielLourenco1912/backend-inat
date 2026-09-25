@@ -12,6 +12,7 @@ import dev.lourencogabriel.inatead.user.exception.PersonAlreadyLinkedToUserExcep
 import dev.lourencogabriel.inatead.user.exception.PersonNotFoundForRegistrationException;
 import dev.lourencogabriel.inatead.user.model.User;
 import dev.lourencogabriel.inatead.user.repository.UserRepository;
+import dev.lourencogabriel.inatead.user.service.UserRoleService;
 import dev.lourencogabriel.inatead.shared.model.UserAccountStatus;
 import dev.lourencogabriel.inatead.shared.model.RecordStatus;
 import dev.lourencogabriel.inatead.web.exception.BusinessRuleException;
@@ -66,6 +67,9 @@ class AuthServiceTest {
     @Mock
     private AccountSecurityService accountSecurityService;
 
+    @Mock
+    private UserRoleService userRoleService;
+
     private AuthService authService;
 
     @BeforeEach
@@ -77,7 +81,8 @@ class AuthServiceTest {
                 this.authenticationManager,
                 this.tokenService,
                 this.challengeService,
-                this.accountSecurityService
+                this.accountSecurityService,
+                this.userRoleService
         );
     }
 
@@ -199,6 +204,7 @@ class AuthServiceTest {
 
         ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
         verify(this.userRepository).save(userCaptor.capture());
+        verify(this.userRoleService).grantInitialRoles(userCaptor.getValue());
 
         assertAll(
                 () -> assertSame(expectedResponse, response),

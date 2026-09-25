@@ -15,6 +15,7 @@ import dev.lourencogabriel.inatead.user.exception.PersonAlreadyLinkedToUserExcep
 import dev.lourencogabriel.inatead.user.exception.PersonNotFoundForRegistrationException;
 import dev.lourencogabriel.inatead.user.model.User;
 import dev.lourencogabriel.inatead.user.repository.UserRepository;
+import dev.lourencogabriel.inatead.user.service.UserRoleService;
 import dev.lourencogabriel.inatead.shared.model.UserAccountStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -40,6 +41,7 @@ public class AuthService {
     private final TokenService tokenService;
     private final AuthChallengeService challengeService;
     private final AccountSecurityService accountSecurityService;
+    private final UserRoleService userRoleService;
 
     @Transactional
     public AuthChallengeResponse authenticate(String email, String password) {
@@ -88,6 +90,7 @@ public class AuthService {
 
         User newUser = this.buildUser(registerRequest, email, person);
         User savedUser = this.userRepository.save(newUser);
+        this.userRoleService.grantInitialRoles(savedUser);
 
         return this.challengeService.issue(
                 savedUser,

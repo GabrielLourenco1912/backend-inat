@@ -89,7 +89,7 @@ Antes de fechar as atividades, o mesmo ciclo processa a janela de lembrete de tr
 
 ### Cadastro de usuários
 
-`POST /api/auth/register` cria somente a conta de acesso. O e-mail é normalizado para minúsculas e precisa coincidir com o `contactEmail` de uma pessoa já cadastrada; essa pessoa é vinculada obrigatoriamente ao novo usuário em uma relação um-para-um. O e-mail de contato das pessoas é único quando informado.
+`POST /api/auth/register` cria somente a conta de acesso. O e-mail é normalizado para minúsculas e precisa coincidir com o `contactEmail` de uma pessoa já cadastrada; essa pessoa é vinculada obrigatoriamente ao novo usuário em uma relação um-para-um. O e-mail de contato das pessoas é único quando informado. No registro, a conta recebe as roles correspondentes aos `personTypes` da pessoa: `ADMIN`, `INSTRUCTOR`, `LEARNER` e `EMPLOYER_MANAGER`. `GUARDIAN` não possui role de acesso.
 
 - se não existir uma pessoa com o e-mail fornecido, a API responde `422 Unprocessable Entity`;
 - se a pessoa existir, mas estiver `INACTIVE` ou `SUSPENDED`, o cadastro também responde `422 Unprocessable Entity`;
@@ -98,9 +98,9 @@ Antes de fechar as atividades, o mesmo ciclo processa a janela de lembrete de tr
 
 Na criação administrativa de usuários, `personId` também é obrigatório e precisa identificar uma pessoa `ACTIVE`. Depois da criação, esse vínculo é imutável: `personId` não faz parte do contrato de atualização e a coluna correspondente não pode ser atualizada pelo ORM. O cadastro de usuário nunca cria uma pessoa implicitamente.
 
-A existência da pessoa elimina a ideia de uma “conta em análise”, mas não permite inferir com segurança se ela é administradora, instrutora, aprendiz ou gestora. Por isso, papel e identidade continuam separados: a conta recebe somente papéis explicitamente concedidos por um administrador. `INVITED` não é um papel nem uma análise cadastral; é apenas o estado transitório até a confirmação do e-mail.
+A existência da pessoa elimina a ideia de uma “conta em análise”. Os tipos definidos no cadastro da pessoa determinam as roles iniciais no registro público; alterações posteriores dos tipos não sincronizam as roles da conta. A gestão administrativa de roles continua disponível. `INVITED` não é um papel nem uma análise cadastral; é apenas o estado transitório até a confirmação do e-mail.
 
-A concessão de qualquer role exige que a pessoa vinculada à conta possua o `personType` de mesmo código. A role `LEARNER` também exige um perfil `Learner` com status `ACTIVE`; tipos incompatíveis e perfis ausentes, inativos ou suspensos resultam em `422 Unprocessable Entity`. As demais roles não dependem de um perfil `Learner`. Classificar uma pessoa não concede roles automaticamente.
+A concessão de qualquer role exige que a pessoa vinculada à conta possua o `personType` de mesmo código. A role `LEARNER` também exige um perfil `Learner` com status `ACTIVE`; tipos incompatíveis e perfis ausentes, inativos ou suspensos resultam em `422 Unprocessable Entity`, inclusive durante o registro. As demais roles não dependem de um perfil `Learner`. Classificar uma pessoa não altera automaticamente as roles de uma conta existente.
 
 O cadastro não emite mais JWT imediatamente. Ele cria a conta como `INVITED`, envia um código de seis dígitos e retorna um desafio com `challengeId`, finalidade, e-mail mascarado, expiração e número máximo de tentativas. O código confirma a posse do e-mail e somente `POST /api/auth/challenge/verify` emite os tokens e ativa a conta.
 

@@ -1,10 +1,13 @@
 package dev.lourencogabriel.inatead.person;
 
 import dev.lourencogabriel.inatead.address.dto.AddressDtos;
+import dev.lourencogabriel.inatead.auth.dto.RegisterRequest;
+import dev.lourencogabriel.inatead.auth.service.AuthService;
 import dev.lourencogabriel.inatead.learner.dto.LearnerDtos;
 import dev.lourencogabriel.inatead.learner.dto.LearnerGuardianDtos;
 import dev.lourencogabriel.inatead.learner.service.LearnerGuardianService;
 import dev.lourencogabriel.inatead.learner.service.LearnerService;
+import dev.lourencogabriel.inatead.mail.EmailSender;
 import dev.lourencogabriel.inatead.person.controller.PersonController;
 import dev.lourencogabriel.inatead.person.dto.PersonDtos;
 import dev.lourencogabriel.inatead.person.model.PersonTypeCode;
@@ -13,6 +16,7 @@ import dev.lourencogabriel.inatead.person.repository.PersonTypeRepository;
 import dev.lourencogabriel.inatead.person.service.PersonService;
 import dev.lourencogabriel.inatead.shared.model.RecordStatus;
 import dev.lourencogabriel.inatead.user.model.User;
+import dev.lourencogabriel.inatead.user.model.UserRole;
 import dev.lourencogabriel.inatead.user.repository.RoleRepository;
 import dev.lourencogabriel.inatead.user.repository.UserRepository;
 import dev.lourencogabriel.inatead.user.service.UserRoleService;
@@ -26,8 +30,10 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
@@ -51,7 +57,9 @@ class PersonTypeIntegrationTest {
     @Autowired private UserRepository userRepository;
     @Autowired private RoleRepository roleRepository;
     @Autowired private UserRoleService userRoles;
+    @Autowired private AuthService authService;
     @Autowired private EntityManager entityManager;
+    @MockitoBean private EmailSender emailSender;
 
     @Test
     void shouldPersistManyTypesPerPersonAndFilterBeforePagination() {
@@ -67,6 +75,35 @@ class PersonTypeIntegrationTest {
         assertEquals(1, page.content().size());
         assertTrue(Set.of(first.id(), second.id()).contains(page.content().getFirst().id()));
         assertEquals(5, typeRepository.count());
+    }
+
+    @Test
+    void shouldPersistInitialRolesDuringPublicRegistration() {
+        String email = "initial-" + SEQUENCE.incrementAndGet() + "@types.test";
+        var person = people.create(new PersonDtos.Request(
+                new AddressDtos.Request("83200000", "Test Street", "10", null,
+                        "Centro", "Paranaguá", "PR", "BR"),
+                "Initial roles user", String.format("%011d", SEQUENCE.incrementAndGet()),
+                email, "41999999999", LocalDate.of(1990, 1, 1), null,
+                RecordStatus.ACTIVE,
+                Set.of(PersonTypeCode.ADMIN, PersonTypeCode.INSTRUCTOR, PersonTypeCode.LEARNER,
+                        PersonTypeCode.EMPLOYER_MANAGER, PersonTypeCode.GUARDIAN)
+        ));
+        learners.create(new LearnerDtos.Request(person.id(), "INITIAL-" + SEQUENCE.incrementAndGet(),
+                true, RecordStatus.ACTIVE));
+        authService.register(new RegisterRequest("Initial roles user", email, true,
+                Instant.now(), "test-password"));
+        User user = userRepository.findByPerson_Id(person.id()).orElseThrow();
+
+        entityManager.flush();
+        entityManager.clear();
+
+        var assignedCodes = userRepository.findWithRolesByUlid(user.getUlid()).orElseThrow()
+                .getUserRoles().stream()
+                .map(UserRole::getRole)
+                .map(role -> role.getCode())
+                .collect(java.util.stream.Collectors.toSet());
+        assertEquals(Set.of("ADMIN", "INSTRUCTOR", "LEARNER", "EMPLOYER_MANAGER"), assignedCodes);
     }
 
     @Test

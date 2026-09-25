@@ -23,6 +23,7 @@ public interface PersonRepository extends JpaRepository<Person, String> {
 
     Optional<Person> findByTaxId(String taxId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<Person> findByContactEmailIgnoreCase(String contactEmail);
 
     boolean existsByTaxId(String taxId);

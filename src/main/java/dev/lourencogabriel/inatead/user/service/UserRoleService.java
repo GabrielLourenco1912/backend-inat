@@ -37,6 +37,19 @@ public class UserRoleService {
     private final PersonRepository personRepository;
 
     @Transactional
+    public void grantInitialRoles(User user) {
+        for (var type : user.getPerson().getPersonTypes()) {
+            String code = type.getCode().name();
+            if (!SystemRoleCode.isSupported(code)) {
+                continue;
+            }
+            Role role = roleRepository.findByCode(code)
+                    .orElseThrow(() -> new IllegalStateException("Standard role is missing: " + code));
+            grant(user.getUlid(), role.getId(), null);
+        }
+    }
+
+    @Transactional
     public UserRoleDtos.Response grant(String userId, Short roleId, String grantedByUserId) {
         UserRoleId id = new UserRoleId(userId, roleId);
         if (userRoleRepository.existsById(id)) {
