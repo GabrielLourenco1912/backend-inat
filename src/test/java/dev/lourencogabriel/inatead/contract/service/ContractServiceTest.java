@@ -12,6 +12,7 @@ import dev.lourencogabriel.inatead.contract.repository.ContractSchoolChangeRepos
 import dev.lourencogabriel.inatead.learner.model.Learner;
 import dev.lourencogabriel.inatead.learner.repository.LearnerRepository;
 import dev.lourencogabriel.inatead.organization.model.Organization;
+import dev.lourencogabriel.inatead.organization.model.OrganizationTypeEntry;
 import dev.lourencogabriel.inatead.organization.repository.OrganizationRepository;
 import dev.lourencogabriel.inatead.person.model.Person;
 import dev.lourencogabriel.inatead.shared.model.ContractStatus;
@@ -324,7 +325,7 @@ class ContractServiceTest {
     private Organization organization(String id, OrganizationType type) {
         Organization value = new Organization();
         value.setId(id);
-        value.setOrganizationType(type);
+        value.getOrganizationTypes().add(new OrganizationTypeEntry(type));
         value.setStatus(RecordStatus.ACTIVE);
         return value;
     }

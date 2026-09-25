@@ -24,6 +24,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -155,8 +156,17 @@ class LearnerRelationshipPolicyTest {
 
         assertThrows(
                 BusinessRuleException.class,
-                () -> policy.validateOrganizationType("school", OrganizationType.EMPLOYER)
+                () -> policy.validateOrganizationType("school", Set.of(OrganizationType.EMPLOYER))
         );
+    }
+
+    @Test
+    void shouldAllowAddingEmployerTypeToContractSchool() {
+        when(contractRepository.existsBySchool_Id("school")).thenReturn(true);
+
+        assertDoesNotThrow(() -> policy.validateOrganizationType(
+                "school", Set.of(OrganizationType.SCHOOL, OrganizationType.EMPLOYER)
+        ));
     }
 
     @Test

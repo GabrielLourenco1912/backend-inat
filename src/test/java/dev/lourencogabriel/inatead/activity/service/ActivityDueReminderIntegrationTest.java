@@ -20,6 +20,7 @@ import dev.lourencogabriel.inatead.notification.model.NotificationRecipient;
 import dev.lourencogabriel.inatead.notification.repository.NotificationRecipientRepository;
 import dev.lourencogabriel.inatead.notification.repository.NotificationRepository;
 import dev.lourencogabriel.inatead.organization.model.Organization;
+import dev.lourencogabriel.inatead.organization.repository.OrganizationTypeRepository;
 import dev.lourencogabriel.inatead.organization.repository.OrganizationRepository;
 import dev.lourencogabriel.inatead.person.model.Person;
 import dev.lourencogabriel.inatead.person.repository.PersonRepository;
@@ -79,6 +80,8 @@ class ActivityDueReminderIntegrationTest {
     private LearnerRepository learnerRepository;
     @Autowired
     private OrganizationRepository organizationRepository;
+    @Autowired
+    private OrganizationTypeRepository organizationTypeRepository;
     @Autowired
     private ContractRepository contractRepository;
     @Autowired
@@ -292,7 +295,7 @@ class ActivityDueReminderIntegrationTest {
     private Organization organization() {
         Organization organization = new Organization();
         organization.setAddress(address("Employer Street"));
-        organization.setOrganizationType(OrganizationType.EMPLOYER);
+        organization.getOrganizationTypes().add(organizationTypeRepository.findById(OrganizationType.EMPLOYER).orElseThrow());
         organization.setLegalName("Reminder Employer Ltda");
         organization.setTradeName("Reminder Employer");
         organization.setTaxId("93000000000001");

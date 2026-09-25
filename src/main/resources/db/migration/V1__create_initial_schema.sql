@@ -297,6 +297,17 @@
         primary key (id)
     ) engine=InnoDB;
 
+    create table organization_type_assignments (
+        organization_id varchar(26) not null,
+        organization_type_code enum ('EMPLOYER','SCHOOL') not null,
+        constraint uk_organization_type_assignments primary key (organization_id, organization_type_code)
+    ) engine=InnoDB;
+
+    create table organization_types (
+        code enum ('EMPLOYER','SCHOOL') not null,
+        primary key (code)
+    ) engine=InnoDB;
+
     create table organizations (
         attendance_closing_day integer,
         created_at datetime(6) not null,
@@ -309,7 +320,6 @@
         legal_name varchar(180) not null,
         trade_name varchar(180),
         contact_email varchar(254) not null,
-        organization_type enum ('EMPLOYER','SCHOOL') not null,
         status enum ('ACTIVE','INACTIVE','SUSPENDED') not null,
         primary key (id)
     ) engine=InnoDB;
@@ -542,6 +552,9 @@
 
     alter table organization_memberships
        add constraint uk_organization_memberships_period unique (person_id, organization_id, membership_role, start_date);
+
+    create index idx_organization_type_assignments_type
+       on organization_type_assignments (organization_type_code);
 
     create index idx_organizations_parent
        on organizations (parent_organization_id);
@@ -781,6 +794,16 @@
        add constraint FKmhbtjdaoke71177we71b4nsfn
        foreign key (person_id)
        references people (id);
+
+    alter table organization_type_assignments
+       add constraint fk_organization_type_assignments_organization
+       foreign key (organization_id)
+       references organizations (id);
+
+    alter table organization_type_assignments
+       add constraint fk_organization_type_assignments_type
+       foreign key (organization_type_code)
+       references organization_types (code);
 
     alter table organizations
        add constraint FK2pcjeyffqurfmgrypdta1rnye

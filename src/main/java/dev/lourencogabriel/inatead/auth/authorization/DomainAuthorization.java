@@ -369,7 +369,7 @@ public class DomainAuthorization {
         if (organization == null || user.getPerson() == null) {
             return false;
         }
-        return organization.getOrganizationType() == OrganizationType.EMPLOYER
+        return organization.hasType(OrganizationType.EMPLOYER)
                 && roleCodes(user).contains("EMPLOYER_MANAGER")
                 && organizationMembershipRepository.existsActiveMembership(
                         user.getPerson().getId(),

@@ -10,6 +10,7 @@ import dev.lourencogabriel.inatead.notification.model.NotificationRecipient;
 import dev.lourencogabriel.inatead.notification.repository.NotificationRecipientRepository;
 import dev.lourencogabriel.inatead.notification.repository.NotificationRepository;
 import dev.lourencogabriel.inatead.organization.model.Organization;
+import dev.lourencogabriel.inatead.organization.model.OrganizationTypeEntry;
 import dev.lourencogabriel.inatead.person.model.Person;
 import dev.lourencogabriel.inatead.shared.model.CohortStatus;
 import dev.lourencogabriel.inatead.shared.model.ContractStatus;
@@ -178,7 +179,7 @@ class NotificationAudienceIntegrationTest {
 
         Organization employer = new Organization();
         employer.setAddress(address());
-        employer.setOrganizationType(OrganizationType.EMPLOYER);
+        employer.getOrganizationTypes().add(entityManager.getReference(OrganizationTypeEntry.class, OrganizationType.EMPLOYER));
         employer.setLegalName("Notification Employer Ltda");
         employer.setTaxId("12345678000190");
         employer.setContactEmail("employer@example.com");

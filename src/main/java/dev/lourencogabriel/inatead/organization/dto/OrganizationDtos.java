@@ -8,11 +8,13 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 import java.time.Instant;
+import java.util.Set;
 
 public final class OrganizationDtos {
 
@@ -22,7 +24,7 @@ public final class OrganizationDtos {
     public record Request(
             String parentOrganizationId,
             @NotNull @Valid AddressDtos.Request address,
-            @NotNull OrganizationType organizationType,
+            @NotEmpty Set<@NotNull OrganizationType> organizationTypes,
             @NotBlank @Size(max = 180) String legalName,
             @Size(max = 180) String tradeName,
             @NotBlank @Pattern(regexp = "\\d{14}") String taxId,
@@ -40,7 +42,7 @@ public final class OrganizationDtos {
             String id,
             String parentOrganizationId,
             AddressDtos.Response address,
-            OrganizationType organizationType,
+            Set<OrganizationType> organizationTypes,
             String legalName,
             String tradeName,
             String taxId,

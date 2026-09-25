@@ -8,6 +8,7 @@ import dev.lourencogabriel.inatead.person.dto.PersonDtos;
 import dev.lourencogabriel.inatead.person.service.PersonService;
 import dev.lourencogabriel.inatead.shared.model.OrganizationType;
 import dev.lourencogabriel.inatead.shared.model.RecordStatus;
+import dev.lourencogabriel.inatead.web.exception.BusinessRuleException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -18,6 +19,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -76,7 +78,7 @@ class AddressCompositionIntegrationTest {
         OrganizationDtos.Response created = organizationService.create(new OrganizationDtos.Request(
                 null,
                 address("Company Street"),
-                OrganizationType.EMPLOYER,
+                Set.of(OrganizationType.EMPLOYER, OrganizationType.SCHOOL),
                 "Address Company Ltda",
                 "Address Company",
                 "12345678000190",
@@ -87,6 +89,9 @@ class AddressCompositionIntegrationTest {
         ));
         String addressId = created.address().id();
 
+        assertEquals(Set.of(OrganizationType.EMPLOYER, OrganizationType.SCHOOL), created.organizationTypes());
+        assertEquals(created.organizationTypes(), organizationService.findById(created.id()).organizationTypes());
+
         assertEquals(initialAddressCount + 1, addressRepository.count());
 
         OrganizationDtos.Response updated = organizationService.update(
@@ -94,7 +99,7 @@ class AddressCompositionIntegrationTest {
                 new OrganizationDtos.Request(
                         null,
                         address("New Company Street"),
-                        OrganizationType.EMPLOYER,
+                        Set.of(OrganizationType.SCHOOL),
                         "Address Company Ltda",
                         "Address Company",
                         "12345678000190",
@@ -106,6 +111,7 @@ class AddressCompositionIntegrationTest {
         );
 
         assertEquals(addressId, updated.address().id());
+        assertEquals(Set.of(OrganizationType.SCHOOL), updated.organizationTypes());
         assertEquals("New Company Street", updated.address().street());
         assertEquals(initialAddressCount + 1, addressRepository.count());
 
@@ -113,6 +119,23 @@ class AddressCompositionIntegrationTest {
 
         assertFalse(addressRepository.existsById(addressId));
         assertEquals(initialAddressCount, addressRepository.count());
+    }
+
+    @Test
+    void shouldRejectOrganizationWithoutTypesInService() {
+        assertThrows(BusinessRuleException.class,
+                () -> organizationService.create(new OrganizationDtos.Request(
+                        null,
+                        address("Untyped Street"),
+                        Set.of(),
+                        "Untyped Company Ltda",
+                        null,
+                        "22345678000190",
+                        "contact-untyped@example.com",
+                        "41999999999",
+                        null,
+                        RecordStatus.ACTIVE
+                )));
     }
 
     private AddressDtos.Request address(String street) {

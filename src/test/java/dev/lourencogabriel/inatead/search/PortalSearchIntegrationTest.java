@@ -18,6 +18,7 @@ import dev.lourencogabriel.inatead.learner.model.Learner;
 import dev.lourencogabriel.inatead.lesson.model.Lesson;
 import dev.lourencogabriel.inatead.lesson.model.LessonParticipant;
 import dev.lourencogabriel.inatead.organization.model.Organization;
+import dev.lourencogabriel.inatead.organization.model.OrganizationTypeEntry;
 import dev.lourencogabriel.inatead.shared.model.*;
 import java.time.Instant;
 import java.math.BigDecimal;
@@ -90,6 +91,26 @@ class PortalSearchIntegrationTest {
         for (String[] pair : List.of(new String[]{"people","instructor"},new String[]{"learners","contract-learner"},new String[]{"organizations","employer"},new String[]{"organizations","school"},new String[]{"organizations","parent"},new String[]{"contracts","enrollment"},new String[]{"cohorts","lesson-cohort"},new String[]{"users","audience-user"},new String[]{"cohorts","audience-cohort"},new String[]{"lessons","activity"}))
             assertDoesNotThrow(() -> search.search(pair[0], "", 0, 5, null, pair[1], null, true, admin));
     }
+    @Test void organizationWithBothTypesAppearsInEmployerAndSchoolLookups() {
+        var admin = actor("ADMIN");
+        var organization = new Organization();
+        organization.getOrganizationTypes().add(em.getReference(OrganizationTypeEntry.class, OrganizationType.EMPLOYER));
+        organization.getOrganizationTypes().add(em.getReference(OrganizationTypeEntry.class, OrganizationType.SCHOOL));
+        organization.setLegalName("Escola Empresa Busca Dupla");
+        organization.setTaxId("99887766554433");
+        organization.setContactEmail("dupla@search.test");
+        organization.setPhoneNumber("41999999999");
+        var address = new dev.lourencogabriel.inatead.address.model.Address();
+        address.setPostalCode("83200000"); address.setStreet("Rua teste");
+        address.setStreetNumber("1"); address.setDistrict("Centro");
+        address.setCity("Paranagua"); address.setStateCode("PR");
+        organization.setAddress(address);
+        em.persist(organization);
+        em.flush();
+
+        assertEquals(1, search.search("organizations", "Busca Dupla", 0, 5, null, "employer", null, true, admin).totalElements());
+        assertEquals(1, search.search("organizations", "Busca Dupla", 0, 5, null, "school", null, true, admin).totalElements());
+    }
     @Test void nonAdminQueriesKeepTheirScopeAndDoNotExposeAdminCatalogs() {
         var instructor = actor("INSTRUCTOR");
         for (String resource : List.of("learners", "contracts", "lessons", "activities"))
@@ -124,7 +145,7 @@ class PortalSearchIntegrationTest {
         lesson.setTitle("Aula pesquisável"); lesson.setStartsAt(Instant.parse("2026-09-11T01:00:00Z"));
         lesson.setEndsAt(Instant.parse("2026-09-11T02:00:00Z")); lesson.setDeliveryMode(DeliveryMode.ONLINE);
         em.persist(lesson);
-        var employer = new Organization(); employer.setOrganizationType(OrganizationType.EMPLOYER);
+        var employer = new Organization(); employer.getOrganizationTypes().add(em.getReference(OrganizationTypeEntry.class, OrganizationType.EMPLOYER));
         employer.setLegalName("Empresa busca"); employer.setTaxId("12345678901234");
         employer.setContactEmail("org@search.test"); employer.setPhoneNumber("41999999999");
         employer.setAddress(new dev.lourencogabriel.inatead.address.model.Address());

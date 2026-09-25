@@ -10,6 +10,7 @@ import dev.lourencogabriel.inatead.lesson.model.Lesson;
 import dev.lourencogabriel.inatead.lesson.repository.LessonParticipantRepository;
 import dev.lourencogabriel.inatead.lesson.service.LessonParticipantService;
 import dev.lourencogabriel.inatead.organization.model.Organization;
+import dev.lourencogabriel.inatead.organization.model.OrganizationTypeEntry;
 import dev.lourencogabriel.inatead.person.model.Person;
 import dev.lourencogabriel.inatead.shared.model.CohortStatus;
 import dev.lourencogabriel.inatead.shared.model.ContractStatus;
@@ -61,7 +62,7 @@ class ApprenticeshipPolicyIntegrationTest {
     void setUp() {
         instructor = person();
         employer = new Organization();
-        employer.setOrganizationType(OrganizationType.EMPLOYER);
+        employer.getOrganizationTypes().add(entities.getReference(OrganizationTypeEntry.class, OrganizationType.EMPLOYER));
         employer.setLegalName("Apprenticeship employer");
         employer.setTaxId(identifier(14));
         employer.setContactEmail("employer@example.com");

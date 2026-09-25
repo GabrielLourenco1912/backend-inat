@@ -98,7 +98,7 @@ public class PortalSearchService {
             if (personId == null) throw new AccessDeniedException("Person required");
             params.put("person", personId);
             params.put("today", BusinessTime.today(clock));
-            String managed = "select m.organization.id from OrganizationMembership m where m.person.id = :person and m.status = 'ACTIVE' and m.startDate <= :today and (m.endDate is null or m.endDate >= :today) and m.organization.organizationType = 'EMPLOYER'";
+            String managed = "select m.organization.id from OrganizationMembership m where m.person.id = :person and m.status = 'ACTIVE' and m.startDate <= :today and (m.endDate is null or m.endDate >= :today) and exists (select ot.code from Organization o join o.organizationTypes ot where o = m.organization and ot.code = 'EMPLOYER')";
             boolean manager = roleCodes.contains("EMPLOYER_MANAGER");
             boolean instructor = roleCodes.contains("INSTRUCTOR");
             String lessonScope = "(" + (instructor ? "@lesson@.instructorPerson.id = :person or " : "") + "exists (select p.id from LessonParticipant p where p.lesson = @lesson@ and p.learner.person.id = :person))";
@@ -196,8 +196,8 @@ public class PortalSearchService {
                     }
                 }
             }
-            case "employer" -> where.add("e.status = 'ACTIVE' and e.organizationType = 'EMPLOYER'");
-            case "school" -> where.add("e.status = 'ACTIVE' and e.organizationType = 'SCHOOL'");
+            case "employer" -> where.add("e.status = 'ACTIVE' and exists (select ot.code from Organization o join o.organizationTypes ot where o = e and ot.code = 'EMPLOYER')");
+            case "school" -> where.add("e.status = 'ACTIVE' and exists (select ot.code from Organization o join o.organizationTypes ot where o = e and ot.code = 'SCHOOL')");
             case "enrollment" -> where.add("e.status in ('DRAFT', 'ACTIVE', 'SUSPENDED')");
             case "lesson-cohort" -> where.add("e.status = 'ACTIVE'");
             case "activity" -> {

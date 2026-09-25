@@ -2,6 +2,8 @@ package dev.lourencogabriel.inatead.migration;
 
 import dev.lourencogabriel.inatead.person.model.PersonTypeCode;
 import dev.lourencogabriel.inatead.person.repository.PersonTypeRepository;
+import dev.lourencogabriel.inatead.organization.repository.OrganizationTypeRepository;
+import dev.lourencogabriel.inatead.shared.model.OrganizationType;
 import dev.lourencogabriel.inatead.user.model.Role;
 import dev.lourencogabriel.inatead.user.repository.RoleRepository;
 import org.flywaydb.core.Flyway;
@@ -23,6 +25,7 @@ class DatabaseMigrationIntegrationTest {
     @Autowired private Flyway flyway;
     @Autowired private RoleRepository roleRepository;
     @Autowired private PersonTypeRepository personTypeRepository;
+    @Autowired private OrganizationTypeRepository organizationTypeRepository;
 
     @Test
     void shouldApplyCurrentSchemaAndSeedSystemCatalogs() {
@@ -35,6 +38,9 @@ class DatabaseMigrationIntegrationTest {
         ), roleRepository.findAll().stream().collect(Collectors.toMap(Role::getCode, Role::getName)));
         assertEquals(Set.of(PersonTypeCode.values()), personTypeRepository.findAll().stream()
                 .map(personType -> personType.getCode())
+                .collect(Collectors.toSet()));
+        assertEquals(Set.of(OrganizationType.values()), organizationTypeRepository.findAll().stream()
+                .map(type -> type.getCode())
                 .collect(Collectors.toSet()));
     }
 }

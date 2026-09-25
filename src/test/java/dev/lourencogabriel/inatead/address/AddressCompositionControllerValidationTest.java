@@ -64,7 +64,7 @@ class AddressCompositionControllerValidationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "organizationType": "EMPLOYER",
+                                  "organizationTypes": ["EMPLOYER"],
                                   "legalName": "Test Company Ltda",
                                   "taxId": "12345678000190",
                                   "contactEmail": "contact@example.com",
@@ -74,6 +74,35 @@ class AddressCompositionControllerValidationTest {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.data[0].field").value("address"));
+
+        verifyNoInteractions(organizationService);
+    }
+
+    @Test
+    void shouldRequireAtLeastOneOrganizationType() throws Exception {
+        organizationMockMvc.perform(post("/api/organizations")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "address": {
+                                    "postalCode": "83200000",
+                                    "street": "Rua Teste",
+                                    "streetNumber": "1",
+                                    "district": "Centro",
+                                    "city": "Paranaguá",
+                                    "stateCode": "PR",
+                                    "countryCode": "BR"
+                                  },
+                                  "organizationTypes": [],
+                                  "legalName": "Test Company Ltda",
+                                  "taxId": "12345678000190",
+                                  "contactEmail": "contact@example.com",
+                                  "phoneNumber": "41999999999",
+                                  "status": "ACTIVE"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data[0].field").value("organizationTypes"));
 
         verifyNoInteractions(organizationService);
     }

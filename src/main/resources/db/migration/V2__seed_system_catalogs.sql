@@ -11,6 +11,10 @@ values ('ADMIN'),
        ('INSTRUCTOR'),
        ('LEARNER');
 
+insert into organization_types (code)
+values ('EMPLOYER'),
+       ('SCHOOL');
+
 insert into addresses (country_code, state_code, created_at, postal_code, updated_at, street_number, id, address_line_2, city, district, street)
 values
        ('BR', 'PR', NOW(6), '83252000', NOW(6), '1257', '1', 'Casa do gabe', 'Paranaguá', 'Vila Bela - Ilha dos Valadares', 'Rua João Teixeira');

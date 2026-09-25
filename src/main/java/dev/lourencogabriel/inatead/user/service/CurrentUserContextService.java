@@ -37,8 +37,7 @@ public class CurrentUserContextService {
                                 personId,
                                 BusinessTime.today(this.clock)
                         ).stream()
-                        .filter(membership -> membership.getOrganization().getOrganizationType()
-                                == OrganizationType.EMPLOYER)
+                        .filter(membership -> membership.getOrganization().hasType(OrganizationType.EMPLOYER))
                         .map(membership -> membership.getOrganization().getId())
                         .distinct()
                         .toList();

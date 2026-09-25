@@ -3,6 +3,7 @@ package dev.lourencogabriel.inatead.user.service;
 import dev.lourencogabriel.inatead.learner.model.Learner;
 import dev.lourencogabriel.inatead.learner.repository.LearnerRepository;
 import dev.lourencogabriel.inatead.organization.model.Organization;
+import dev.lourencogabriel.inatead.organization.model.OrganizationTypeEntry;
 import dev.lourencogabriel.inatead.organization.model.OrganizationMembership;
 import dev.lourencogabriel.inatead.organization.repository.OrganizationMembershipRepository;
 import dev.lourencogabriel.inatead.shared.model.OrganizationType;
@@ -110,7 +111,7 @@ class CurrentUserContextServiceTest {
     private Organization organization(String id, OrganizationType type) {
         Organization organization = new Organization();
         organization.setId(id);
-        organization.setOrganizationType(type);
+        organization.getOrganizationTypes().add(new OrganizationTypeEntry(type));
         return organization;
     }
 

@@ -214,11 +214,11 @@ public class ContractService extends AbstractCrudService<Contract, ContractDtos.
 
     @Override
     protected void validate(Contract contract, boolean creating) {
-        if (contract.getEmployer().getOrganizationType() != OrganizationType.EMPLOYER) {
+        if (!contract.getEmployer().hasType(OrganizationType.EMPLOYER)) {
             throw new BusinessRuleException("employerId must reference an EMPLOYER organization");
         }
         if (contract.getSchool() != null
-                && contract.getSchool().getOrganizationType() != OrganizationType.SCHOOL) {
+                && !contract.getSchool().hasType(OrganizationType.SCHOOL)) {
             throw new BusinessRuleException("schoolId must reference a SCHOOL organization");
         }
         if (contract.getSchool() != null

@@ -93,15 +93,15 @@ public class LearnerRelationshipPolicy {
                 });
     }
 
-    public void validateOrganizationType(String organizationId, OrganizationType organizationType) {
+    public void validateOrganizationType(String organizationId, Set<OrganizationType> organizationTypes) {
         if (contractRepository.existsBySchool_Id(organizationId)
-                && organizationType != OrganizationType.SCHOOL) {
+                && !organizationTypes.contains(OrganizationType.SCHOOL)) {
             throw new BusinessRuleException(
                     "An organization referenced as a contract school must remain a SCHOOL"
             );
         }
         if (contractRepository.existsByEmployer_Id(organizationId)
-                && organizationType != OrganizationType.EMPLOYER) {
+                && !organizationTypes.contains(OrganizationType.EMPLOYER)) {
             throw new BusinessRuleException(
                     "An organization referenced as a contract employer must remain an EMPLOYER"
             );

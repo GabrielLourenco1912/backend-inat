@@ -12,6 +12,8 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
@@ -19,6 +21,9 @@ import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+
+import java.util.HashSet;
+import java.util.Set;
 
 @Entity
 @Table(
@@ -47,9 +52,19 @@ public class Organization extends AuditedEntity {
     @JoinColumn(name = "address_id", nullable = false, unique = true)
     private Address address;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "organization_type", length = 30, nullable = false)
-    private OrganizationType organizationType;
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "organization_type_assignments",
+            joinColumns = @JoinColumn(name = "organization_id", nullable = false),
+            inverseJoinColumns = @JoinColumn(name = "organization_type_code", nullable = false),
+            uniqueConstraints = @UniqueConstraint(
+                    name = "uk_organization_type_assignments",
+                    columnNames = {"organization_id", "organization_type_code"}
+            ),
+            indexes = @Index(name = "idx_organization_type_assignments_type", columnList = "organization_type_code")
+    )
+    @org.hibernate.annotations.BatchSize(size = 100)
+    private Set<OrganizationTypeEntry> organizationTypes = new HashSet<>();
 
     @Column(name = "legal_name", length = 180, nullable = false)
     private String legalName;
@@ -72,4 +87,8 @@ public class Organization extends AuditedEntity {
     @Enumerated(EnumType.STRING)
     @Column(length = 20, nullable = false)
     private RecordStatus status = RecordStatus.ACTIVE;
+
+    public boolean hasType(OrganizationType type) {
+        return organizationTypes.stream().anyMatch(entry -> entry.getCode() == type);
+    }
 }

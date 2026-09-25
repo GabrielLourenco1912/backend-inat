@@ -12,6 +12,7 @@ import dev.lourencogabriel.inatead.lesson.repository.LessonParticipantRepository
 import dev.lourencogabriel.inatead.lesson.repository.LessonRepository;
 import dev.lourencogabriel.inatead.notification.repository.NotificationRecipientRepository;
 import dev.lourencogabriel.inatead.organization.model.Organization;
+import dev.lourencogabriel.inatead.organization.model.OrganizationTypeEntry;
 import dev.lourencogabriel.inatead.organization.repository.OrganizationMembershipRepository;
 import dev.lourencogabriel.inatead.organization.repository.OrganizationRepository;
 import dev.lourencogabriel.inatead.person.model.Person;
@@ -83,7 +84,7 @@ class DomainAuthorizationTest {
 
         employer = new Organization();
         employer.setId("employer");
-        employer.setOrganizationType(OrganizationType.EMPLOYER);
+        employer.getOrganizationTypes().add(new OrganizationTypeEntry(OrganizationType.EMPLOYER));
         when(userRepository.findWithRolesByUlid("manager")).thenReturn(Optional.of(manager));
         lenient().when(organizationRepository.findById("employer"))
                 .thenReturn(Optional.of(employer));
@@ -113,7 +114,8 @@ class DomainAuthorizationTest {
 
     @Test
     void shouldRejectCompanyManagerForASchoolEvenWithAnActiveMembership() {
-        employer.setOrganizationType(OrganizationType.SCHOOL);
+        employer.getOrganizationTypes().clear();
+        employer.getOrganizationTypes().add(new OrganizationTypeEntry(OrganizationType.SCHOOL));
 
         assertFalse(authorization.canAccessOrganization(authentication, "employer"));
     }
