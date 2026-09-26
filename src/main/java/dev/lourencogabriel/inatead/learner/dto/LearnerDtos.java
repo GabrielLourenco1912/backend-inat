@@ -3,7 +3,6 @@ package dev.lourencogabriel.inatead.learner.dto;
 import dev.lourencogabriel.inatead.shared.model.RecordStatus;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
 
 import java.time.Instant;
 
@@ -14,7 +13,6 @@ public final class LearnerDtos {
 
     public record Request(
             @NotBlank String personId,
-            @NotBlank @Size(max = 30) String registrationNumber,
             boolean hasCompletedHighSchool,
             @NotNull RecordStatus status
     ) {
@@ -23,7 +21,7 @@ public final class LearnerDtos {
     public record Response(
             String id,
             String personId,
-            String registrationNumber,
+            Long registrationNumber,
             boolean hasCompletedHighSchool,
             RecordStatus status,
             Instant createdAt,

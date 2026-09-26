@@ -61,7 +61,6 @@ class LessonScheduleConflictIntegrationTest {
 
         learner = new Learner();
         learner.setPerson(instructor);
-        learner.setRegistrationNumber("SCHEDULE-TEST");
         learner = learnerRepository.save(learner);
 
         Cohort firstCohort = cohortRepository.save(cohort("SCHEDULE-A"));

@@ -125,7 +125,12 @@ public class PortalSearchService {
         String q = text == null ? "" : text.trim().toLowerCase(Locale.ROOT);
         if (!q.isEmpty()) {
             params.put("q", "%" + q.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%");
-            var matches = new ArrayList<>(spec.fields().stream().filter(field -> admin || (!field.endsWith("person.fullName") && !field.equals("instructorPerson.fullName"))).map(field -> "lower(e." + field + ") like :q escape '!' ").toList());
+            var matches = new ArrayList<>(spec.fields().stream()
+                    .filter(field -> admin || (!field.endsWith("person.fullName") && !field.equals("instructorPerson.fullName")))
+                    .map(field -> field.endsWith("registrationNumber")
+                            ? "cast(e." + field + " as string) like :q escape '!'"
+                            : "lower(e." + field + ") like :q escape '!'")
+                    .toList());
             if (resource.equals("people")) matches.add("exists (select pt.code from Person p join p.personTypes pt where p = e and lower(cast(pt.code as string)) like :q escape '!')");
             if (resource.equals("people")) {
                 var labels = Map.of(PersonTypeCode.ADMIN, "administrador", PersonTypeCode.INSTRUCTOR, "instrutor",

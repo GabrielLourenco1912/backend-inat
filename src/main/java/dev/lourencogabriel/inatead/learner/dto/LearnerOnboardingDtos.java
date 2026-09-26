@@ -30,7 +30,6 @@ public final class LearnerOnboardingDtos {
     }
 
     public record LearnerProfile(
-            @NotBlank @Size(max = 30) String registrationNumber,
             boolean hasCompletedHighSchool,
             @NotNull RecordStatus status
     ) {

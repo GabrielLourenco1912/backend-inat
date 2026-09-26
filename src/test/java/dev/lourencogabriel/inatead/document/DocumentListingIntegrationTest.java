@@ -145,7 +145,7 @@ class DocumentListingIntegrationTest {
 
     private Learner learner(Person person) {
         var response = learners.create(new LearnerDtos.Request(person.getId(),
-                "DOC-" + SEQUENCE.incrementAndGet(), true, RecordStatus.ACTIVE));
+                true, RecordStatus.ACTIVE));
         return entityManager.find(Learner.class, response.id());
     }
 

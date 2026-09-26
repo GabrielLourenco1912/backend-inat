@@ -61,6 +61,5 @@ insert into learners (has_completed_high_school,
                       created_at,
                       updated_at,
                       id, person_id,
-                      registration_number,
                       status
-) values (1, NOW(6), NOW(6), 1, 1, 1, 'ACTIVE')
+) values (1, NOW(6), NOW(6), 1, 1, 'ACTIVE')

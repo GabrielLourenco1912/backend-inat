@@ -251,7 +251,6 @@ class ApprenticeshipPolicyIntegrationTest {
     private Contract contract(int minutes) {
         var learner = new Learner();
         learner.setPerson(person());
-        learner.setRegistrationNumber(identifier(20));
         learner.setHasCompletedHighSchool(true);
         entities.persist(learner);
         var contract = new Contract();

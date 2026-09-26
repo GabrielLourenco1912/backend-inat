@@ -45,7 +45,7 @@ class LearnerOnboardingTransactionIntegrationTest {
         long personCount = personRepository.count();
 
         var response = service.fromPerson(person.id(), new LearnerOnboardingDtos.ExistingPersonRequest(
-                new LearnerOnboardingDtos.LearnerProfile("EXISTING-001", true, RecordStatus.ACTIVE),
+                new LearnerOnboardingDtos.LearnerProfile(true, RecordStatus.ACTIVE),
                 List.of()
         ));
 
@@ -53,16 +53,18 @@ class LearnerOnboardingTransactionIntegrationTest {
         assertEquals(person.id(), response.person().id());
         assertEquals(personCount, personRepository.count());
         assertTrue(learnerRepository.existsByPerson_Id(person.id()));
+        assertTrue(response.learner().registrationNumber() > 0);
+        assertEquals(response.learner().registrationNumber(),
+                learnerRepository.findByPerson_Id(person.id()).orElseThrow().getRegistrationNumber());
         assertEquals(Set.of(PersonTypeCode.LEARNER), personService.findById(person.id()).personTypes());
     }
 
     @Test
     void shouldRollBackExistingPersonLearnerWhenGuardianLinkFails() {
         var person = personService.create(personRequest("98765432102", LocalDate.of(2010, 1, 1)));
-        String registrationNumber = "EXISTING-ROLLBACK-001";
         var request = new LearnerOnboardingDtos.ExistingPersonRequest(
                 new LearnerOnboardingDtos.LearnerProfile(
-                        registrationNumber, false, RecordStatus.ACTIVE
+                        false, RecordStatus.ACTIVE
                 ),
                 List.of(new LearnerOnboardingDtos.Guardian(
                         "missing-guardian", "MOTHER", true, true
@@ -72,15 +74,15 @@ class LearnerOnboardingTransactionIntegrationTest {
         assertThrows(ResourceNotFoundException.class, () -> service.fromPerson(person.id(), request));
 
         assertTrue(personRepository.existsById(person.id()));
-        assertFalse(learnerRepository.existsByRegistrationNumber(registrationNumber));
+        assertFalse(learnerRepository.existsByPerson_Id(person.id()));
         assertEquals(Set.of(PersonTypeCode.LEARNER), personService.findById(person.id()).personTypes());
     }
 
     @Test
     void shouldRollBackPersonAndLearnerWhenGuardianLinkFails() {
         long addressCountBefore = addressRepository.count();
+        long learnerCountBefore = learnerRepository.count();
         String taxId = "98765432100";
-        String registrationNumber = "ROLLBACK-001";
         LearnerOnboardingDtos.Request request = new LearnerOnboardingDtos.Request(
                 new PersonDtos.Request(
                         address(),
@@ -94,7 +96,6 @@ class LearnerOnboardingTransactionIntegrationTest {
                         Set.of(PersonTypeCode.LEARNER)
                 ),
                 new LearnerOnboardingDtos.LearnerProfile(
-                        registrationNumber,
                         false,
                         RecordStatus.ACTIVE
                 ),
@@ -109,7 +110,7 @@ class LearnerOnboardingTransactionIntegrationTest {
         assertThrows(ResourceNotFoundException.class, () -> service.onboard(request));
 
         assertFalse(personRepository.existsByTaxId(taxId));
-        assertFalse(learnerRepository.existsByRegistrationNumber(registrationNumber));
+        assertEquals(learnerCountBefore, learnerRepository.count());
         assertEquals(addressCountBefore, addressRepository.count());
     }
 

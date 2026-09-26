@@ -156,7 +156,7 @@ class PortalSearchIntegrationTest {
         Learner eligible = null;
         for (int i = 0; i < 10; i++) {
             var learner = new Learner(); learner.setPerson(person("Aprendiz busca " + i, LocalDate.of(2000,1,1), PersonTypeCode.LEARNER));
-            learner.setRegistrationNumber("REG-" + i); learner.setHasCompletedHighSchool(true); em.persist(learner);
+            learner.setHasCompletedHighSchool(true); em.persist(learner);
             var contract = new Contract(); contract.setLearner(learner); contract.setEmployer(employer);
             contract.setMonthlySalary(new BigDecimal("1000")); contract.setStatus(ContractStatus.ACTIVE);
             contract.setStartDate(LocalDate.of(2026,9,10)); contract.setEndDate(LocalDate.of(2026,9,10));
@@ -166,10 +166,11 @@ class PortalSearchIntegrationTest {
             if (i == 9) eligible = learner;
         }
         em.flush();
-        var result = search.search("learners", "REG", 0, 5, null, "participant", lesson.getId(), true, admin);
+        String registration = String.valueOf(eligible.getRegistrationNumber());
+        var result = search.search("learners", registration, 0, 5, null, "participant", lesson.getId(), true, admin);
         assertEquals(1, result.totalElements());
         assertEquals(eligible.getId(), ((PortalSearchService.Option) result.content().getFirst()).id());
-        assertEquals(0, search.search("learners", "REG", 0, 5, null, "participant", lesson.getId(), true, instructor).totalElements(), "Instructor must not enumerate learners outside their scope");
+        assertEquals(0, search.search("learners", registration, 0, 5, null, "participant", lesson.getId(), true, instructor).totalElements(), "Instructor must not enumerate learners outside their scope");
         assertEquals(1, search.search("lessons", "pesquisável", 0, 20, null, "", null, false, instructor).totalElements());
         var other = actor("INSTRUCTOR");
         assertEquals(0, search.search("lessons", "pesquisável", 0, 20, null, "", null, false, other).totalElements());

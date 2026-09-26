@@ -89,7 +89,7 @@ class LearnerOnboardingServiceTest {
                 ArgumentCaptor.forClass(LearnerDtos.Request.class);
         verify(learnerService).create(learnerRequest.capture());
         assertEquals("person", learnerRequest.getValue().personId());
-        assertEquals("MAT-001", learnerRequest.getValue().registrationNumber());
+        assertFalse(learnerRequest.getValue().hasCompletedHighSchool());
         verifyNoInteractions(learnerGuardianService);
     }
 
@@ -220,7 +220,7 @@ class LearnerOnboardingServiceTest {
         assertEquals(person.getId(), response.person().id());
         assertEquals("learner", response.learner().id());
         verify(learnerService).create(new LearnerDtos.Request(
-                person.getId(), "MAT-001", false, RecordStatus.ACTIVE
+                person.getId(), false, RecordStatus.ACTIVE
         ));
         verify(personService, never()).create(any());
         verify(personService, never()).update(any(), any());
@@ -272,7 +272,7 @@ class LearnerOnboardingServiceTest {
             List<LearnerOnboardingDtos.Guardian> guardians
     ) {
         return new LearnerOnboardingDtos.ExistingPersonRequest(
-                new LearnerOnboardingDtos.LearnerProfile("MAT-001", false, RecordStatus.ACTIVE),
+                new LearnerOnboardingDtos.LearnerProfile(false, RecordStatus.ACTIVE),
                 guardians
         );
     }
@@ -284,7 +284,6 @@ class LearnerOnboardingServiceTest {
         return new LearnerOnboardingDtos.Request(
                 person,
                 new LearnerOnboardingDtos.LearnerProfile(
-                        "MAT-001",
                         false,
                         RecordStatus.ACTIVE
                 ),
@@ -356,7 +355,7 @@ class LearnerOnboardingServiceTest {
         return new LearnerDtos.Response(
                 id,
                 personId,
-                "MAT-001",
+                1L,
                 false,
                 RecordStatus.ACTIVE,
                 null,

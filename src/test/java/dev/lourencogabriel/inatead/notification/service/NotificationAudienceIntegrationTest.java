@@ -158,7 +158,6 @@ class NotificationAudienceIntegrationTest {
 
         Learner learner = new Learner();
         learner.setPerson(person);
-        learner.setRegistrationNumber("REG-" + taxId);
         learner.setStatus(RecordStatus.ACTIVE);
         entityManager.persist(learner);
 

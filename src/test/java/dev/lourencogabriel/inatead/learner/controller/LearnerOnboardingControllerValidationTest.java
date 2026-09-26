@@ -54,7 +54,6 @@ class LearnerOnboardingControllerValidationTest {
                                     "birthDate": "2010-01-01"
                                   },
                                   "learner": {
-                                    "registrationNumber": "",
                                     "hasCompletedHighSchool": false,
                                     "status": "ACTIVE"
                                   },
@@ -76,7 +75,6 @@ class LearnerOnboardingControllerValidationTest {
                                 "person.taxId",
                                 "person.contactEmail",
                                 "person.address.postalCode",
-                                "learner.registrationNumber",
                                 "guardians[0].relationshipType"
                         )
                 ));
@@ -108,7 +106,6 @@ class LearnerOnboardingControllerValidationTest {
                                     "status": "ACTIVE"
                                   },
                                   "learner": {
-                                    "registrationNumber": "MAT-001",
                                     "hasCompletedHighSchool": true,
                                     "status": "ACTIVE"
                                   },

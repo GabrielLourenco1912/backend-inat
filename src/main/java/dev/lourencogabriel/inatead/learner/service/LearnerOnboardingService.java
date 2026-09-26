@@ -68,7 +68,6 @@ public class LearnerOnboardingService {
     ) {
         LearnerDtos.Response learner = learnerService.create(new LearnerDtos.Request(
                 resolvedPerson.person().id(),
-                profile.registrationNumber(),
                 profile.hasCompletedHighSchool(),
                 profile.status()
         ));

@@ -36,13 +36,13 @@ class LearnerFromPersonControllerValidationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "learner": {"registrationNumber": "", "hasCompletedHighSchool": false, "status": "ACTIVE"},
+                                  "learner": {"hasCompletedHighSchool": false, "status": "ACTIVE"},
                                   "guardians": [{"guardianPersonId": "guardian", "relationshipType": "", "legalGuardian": false, "primaryContact": false}]
                                 }
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.data[*].field", hasItems(
-                        "learner.registrationNumber", "guardians[0].relationshipType"
+                        "guardians[0].relationshipType"
                 )));
 
         verifyNoInteractions(service);
@@ -55,7 +55,6 @@ class LearnerFromPersonControllerValidationTest {
                         .content("""
                                 {
                                   "learner": {
-                                    "registrationNumber": "MAT-001",
                                     "hasCompletedHighSchool": true,
                                     "status": "ACTIVE"
                                   },
@@ -66,7 +65,7 @@ class LearnerFromPersonControllerValidationTest {
 
         verify(service).fromPerson(org.mockito.ArgumentMatchers.eq("person-id"),
                 org.mockito.ArgumentMatchers.argThat(request ->
-                        request.learner().registrationNumber().equals("MAT-001")
+                        request.learner().hasCompletedHighSchool()
                                 && request.guardians().isEmpty()));
     }
 }

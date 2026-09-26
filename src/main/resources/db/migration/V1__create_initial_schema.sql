@@ -199,9 +199,10 @@
         updated_at datetime(6) not null,
         id varchar(26) not null,
         person_id varchar(26) not null,
-        registration_number varchar(30) not null,
+        registration_number bigint not null auto_increment,
         status enum ('ACTIVE','INACTIVE','SUSPENDED') not null,
-        primary key (id)
+        primary key (id),
+        constraint uk_learners_registration_number unique (registration_number)
     ) engine=InnoDB;
 
     create table lesson_participants (
@@ -507,9 +508,6 @@
 
     alter table learners
        add constraint uk_learners_person_id unique (person_id);
-
-    alter table learners
-       add constraint uk_learners_registration_number unique (registration_number);
 
     create index idx_lesson_participants_learner
        on lesson_participants (learner_id, lesson_id);

@@ -44,6 +44,15 @@ public class LearnerService extends AbstractCrudService<Learner, LearnerDtos.Req
     }
 
     @Override
+    @Transactional
+    public LearnerDtos.Response create(LearnerDtos.Request request) {
+        Learner learner = newEntity();
+        apply(learner, request);
+        validate(learner, true);
+        return toResponse(learnerRepository.saveAndFlush(learner));
+    }
+
+    @Override
     protected void apply(Learner entity, LearnerDtos.Request request) {
         if (entity.getId() != null
                 && !entity.getPerson().getId().equals(request.personId())) {
@@ -51,7 +60,6 @@ public class LearnerService extends AbstractCrudService<Learner, LearnerDtos.Req
         }
         entity.setPerson(personRepository.findByIdForUpdate(request.personId())
                 .orElseThrow(() -> new ResourceNotFoundException("Person", request.personId())));
-        entity.setRegistrationNumber(request.registrationNumber().trim());
         entity.setHasCompletedHighSchool(request.hasCompletedHighSchool());
         entity.setStatus(request.status());
     }
@@ -64,16 +72,6 @@ public class LearnerService extends AbstractCrudService<Learner, LearnerDtos.Req
                 : learnerRepository.existsByPerson_IdAndIdNot(entity.getPerson().getId(), entity.getId());
         if (duplicatePerson) {
             throw new ResourceConflictException("This person is already registered as a learner");
-        }
-
-        boolean duplicateRegistration = creating
-                ? learnerRepository.existsByRegistrationNumber(entity.getRegistrationNumber())
-                : learnerRepository.existsByRegistrationNumberAndIdNot(
-                        entity.getRegistrationNumber(),
-                        entity.getId()
-                );
-        if (duplicateRegistration) {
-            throw new ResourceConflictException("This learner registration number is already in use");
         }
 
         if (!creating) {

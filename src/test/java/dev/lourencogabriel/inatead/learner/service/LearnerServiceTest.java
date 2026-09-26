@@ -19,6 +19,7 @@ import java.time.LocalDate;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -52,9 +53,10 @@ class LearnerServiceTest {
         when(personRepository.findByIdForUpdate("person")).thenReturn(Optional.of(learner.getPerson()));
         when(learnerRepository.save(learner)).thenReturn(learner);
 
-        service.update("learner", request("person"));
+        LearnerDtos.Response response = service.update("learner", request("person"));
 
         verify(relationshipPolicy).validateLearnerUpdate(learner);
+        assertEquals(1L, response.registrationNumber());
     }
 
     @Test
@@ -74,7 +76,6 @@ class LearnerServiceTest {
     private LearnerDtos.Request request(String personId) {
         return new LearnerDtos.Request(
                 personId,
-                "MAT-001",
                 false,
                 RecordStatus.ACTIVE
         );
@@ -88,7 +89,7 @@ class LearnerServiceTest {
         Learner learner = new Learner();
         learner.setId("learner");
         learner.setPerson(person);
-        learner.setRegistrationNumber("MAT-001");
+        learner.setRegistrationNumber(1L);
         learner.setStatus(RecordStatus.ACTIVE);
         return learner;
     }

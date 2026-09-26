@@ -17,10 +17,6 @@ public interface LearnerRepository extends JpaRepository<Learner, String> {
 
     boolean existsByPerson_IdAndIdNot(String personId, String id);
 
-    boolean existsByRegistrationNumber(String registrationNumber);
-
-    boolean existsByRegistrationNumberAndIdNot(String registrationNumber, String id);
-
     Optional<Learner> findByPerson_Id(String personId);
 
     Page<Learner> findByPerson_Id(String personId, Pageable pageable);

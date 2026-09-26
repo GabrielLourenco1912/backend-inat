@@ -267,7 +267,6 @@ class ActivityDueReminderIntegrationTest {
 
         Learner learner = new Learner();
         learner.setPerson(person);
-        learner.setRegistrationNumber(registration);
         learner = learnerRepository.save(learner);
         return new LearnerAccount(person, user, learner);
     }

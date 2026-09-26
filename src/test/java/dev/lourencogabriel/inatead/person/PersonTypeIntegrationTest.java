@@ -89,8 +89,7 @@ class PersonTypeIntegrationTest {
                 Set.of(PersonTypeCode.ADMIN, PersonTypeCode.INSTRUCTOR, PersonTypeCode.LEARNER,
                         PersonTypeCode.EMPLOYER_MANAGER, PersonTypeCode.GUARDIAN)
         ));
-        learners.create(new LearnerDtos.Request(person.id(), "INITIAL-" + SEQUENCE.incrementAndGet(),
-                true, RecordStatus.ACTIVE));
+        learners.create(new LearnerDtos.Request(person.id(), true, RecordStatus.ACTIVE));
         authService.register(new RegisterRequest("Initial roles user", email, true,
                 Instant.now(), "test-password"));
         User user = userRepository.findByPerson_Id(person.id()).orElseThrow();
@@ -143,13 +142,13 @@ class PersonTypeIntegrationTest {
     void shouldRejectLearnerProfileWithoutLearnerType() {
         var person = create(PersonTypeCode.GUARDIAN);
         assertThrows(BusinessRuleException.class, () -> learners.create(
-                new LearnerDtos.Request(person.id(), "WRONG-TYPE", false, RecordStatus.ACTIVE)));
+                new LearnerDtos.Request(person.id(), false, RecordStatus.ACTIVE)));
     }
 
     @Test
     void shouldRejectAnAdultGuardianWithoutGuardianType() {
         var learnerPerson = create(PersonTypeCode.LEARNER);
-        var learner = learners.create(new LearnerDtos.Request(learnerPerson.id(), "GUARDIAN-TYPE", false, RecordStatus.ACTIVE));
+        var learner = learners.create(new LearnerDtos.Request(learnerPerson.id(), false, RecordStatus.ACTIVE));
         var adult = create(PersonTypeCode.INSTRUCTOR);
 
         BusinessRuleException error = assertThrows(BusinessRuleException.class, () -> guardians.create(learner.id(),
@@ -160,7 +159,7 @@ class PersonTypeIntegrationTest {
     @Test
     void shouldAcceptTypedGuardianAndPreventRemovingTheirType() {
         var learnerPerson = create(PersonTypeCode.LEARNER);
-        var learner = learners.create(new LearnerDtos.Request(learnerPerson.id(), "TYPED-GUARDIAN", false, RecordStatus.ACTIVE));
+        var learner = learners.create(new LearnerDtos.Request(learnerPerson.id(), false, RecordStatus.ACTIVE));
         var guardian = create(PersonTypeCode.GUARDIAN);
         assertEquals(guardian.id(), guardians.create(learner.id(),
                 new LearnerGuardianDtos.Request(guardian.id(), "MOTHER", true, true)).guardianPersonId());

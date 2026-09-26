@@ -85,7 +85,6 @@ class OnlineLessonAttendanceIntegrationTest {
 
         Learner learner = new Learner();
         learner.setPerson(person);
-        learner.setRegistrationNumber("REG-" + suffix.substring(0, 8));
         learner = learnerRepository.save(learner);
 
         Cohort cohort = new Cohort();

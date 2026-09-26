@@ -15,6 +15,8 @@ import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.Generated;
+import org.hibernate.generator.EventType;
 
 @Entity
 @Table(
@@ -33,8 +35,9 @@ public class Learner extends AuditedEntity {
     @JoinColumn(name = "person_id", nullable = false)
     private Person person;
 
-    @Column(name = "registration_number", length = 30, nullable = false)
-    private String registrationNumber;
+    @Generated(event = EventType.INSERT)
+    @Column(name = "registration_number", nullable = false, insertable = false, updatable = false)
+    private Long registrationNumber;
 
     @Column(name = "has_completed_high_school", nullable = false)
     private boolean hasCompletedHighSchool;
