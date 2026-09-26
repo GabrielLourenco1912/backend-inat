@@ -63,6 +63,7 @@ class PersonTypeIntegrationTest {
 
     @Test
     void shouldPersistManyTypesPerPersonAndFilterBeforePagination() {
+        long existingGuardians = people.findByType(PersonTypeCode.GUARDIAN, PageRequest.of(0, 1)).totalElements();
         var first = create(PersonTypeCode.INSTRUCTOR, PersonTypeCode.GUARDIAN);
         var second = create(PersonTypeCode.GUARDIAN);
         create(PersonTypeCode.ADMIN);
@@ -71,9 +72,9 @@ class PersonTypeIntegrationTest {
 
         assertEquals(Set.of(PersonTypeCode.INSTRUCTOR, PersonTypeCode.GUARDIAN), people.findById(first.id()).personTypes());
         var page = people.findByType(PersonTypeCode.GUARDIAN, PageRequest.of(0, 1));
-        assertEquals(2, page.totalElements());
+        assertEquals(existingGuardians + 2, page.totalElements());
         assertEquals(1, page.content().size());
-        assertTrue(Set.of(first.id(), second.id()).contains(page.content().getFirst().id()));
+        assertTrue(people.findById(page.content().getFirst().id()).personTypes().contains(PersonTypeCode.GUARDIAN));
         assertEquals(5, typeRepository.count());
     }
 

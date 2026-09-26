@@ -81,11 +81,12 @@ class PortalSearchIntegrationTest {
     }
     @Test void lookupEligibilityAndLiteralWildcardAreAppliedBeforeLimit() {
         var admin = actor("ADMIN");
+        long existingAdultGuardians = search.search("people", "responsável", 0, 5, null, "guardian", null, true, admin).totalElements();
         for(int i=0;i<6;i++) person("Guardian " + i, LocalDate.now().minusYears(10), PersonTypeCode.GUARDIAN);
         person("Guardian adulto", LocalDate.of(1990,1,1), PersonTypeCode.GUARDIAN);
         person("Literal %_", LocalDate.of(1990,1,1), PersonTypeCode.GUARDIAN);
         assertEquals(1, search.search("people", "guardian adulto", 0, 5, null, "guardian", null, true, admin).totalElements());
-        assertEquals(2, search.search("people", "responsável", 0, 5, null, "guardian", null, true, admin).totalElements());
+        assertEquals(existingAdultGuardians + 2, search.search("people", "responsável", 0, 5, null, "guardian", null, true, admin).totalElements());
         assertEquals(1, search.search("people", "%_", 0, 20, null, "", null, false, admin).totalElements());
         assertEquals(0, search.search("people", "guardian", 0, 5, "INSTRUCTOR", "member", null, true, admin).totalElements());
         for (String[] pair : List.of(new String[]{"people","instructor"},new String[]{"learners","contract-learner"},new String[]{"organizations","employer"},new String[]{"organizations","school"},new String[]{"organizations","parent"},new String[]{"contracts","enrollment"},new String[]{"cohorts","lesson-cohort"},new String[]{"users","audience-user"},new String[]{"cohorts","audience-cohort"},new String[]{"lessons","activity"}))

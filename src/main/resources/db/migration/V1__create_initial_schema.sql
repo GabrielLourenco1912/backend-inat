@@ -236,6 +236,18 @@
         primary key (id)
     ) engine=InnoDB;
 
+    create table legacy_import_audit (
+        id varchar(26) not null,
+        entity_table varchar(40) not null,
+        entity_id varchar(26) not null,
+        source_file varchar(100) not null,
+        source_row integer,
+        mock_fields json not null,
+        notes text,
+        created_at datetime(6) not null,
+        primary key (id)
+    ) engine=InnoDB;
+
     create table lifecycle_status_history (
         changed_at datetime(6) not null,
         aggregate_id varchar(26) not null,
@@ -526,6 +538,9 @@
 
     create index idx_lifecycle_status_history_aggregate_time
        on lifecycle_status_history (aggregate_type, aggregate_id, changed_at);
+
+    create index idx_legacy_import_audit_entity
+       on legacy_import_audit (entity_table, entity_id);
 
     create index idx_notification_recipients_inbox
        on notification_recipients (recipient_user_id, channel, read_at);

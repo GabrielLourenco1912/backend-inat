@@ -29,7 +29,7 @@ class DatabaseMigrationIntegrationTest {
 
     @Test
     void shouldApplyCurrentSchemaAndSeedSystemCatalogs() {
-        assertEquals("2", flyway.info().current().getVersion().toString());
+        assertEquals("4", flyway.info().current().getVersion().toString());
         assertEquals(Map.of(
                 "ADMIN", "Administrator",
                 "INSTRUCTOR", "Instructor",
