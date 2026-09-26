@@ -147,6 +147,52 @@ class ContractServiceTest {
     }
 
     @Test
+    void shouldAllowSameOrganizationAsEmployerAndSchoolWhenItHasBothTypes() {
+        learner.getPerson().setBirthDate(LocalDate.of(2010, 1, 1));
+        employer.getOrganizationTypes().add(new OrganizationTypeEntry(OrganizationType.SCHOOL));
+        stubSave();
+
+        ContractDtos.Response response = service.create(request(
+                "employer",
+                LocalDate.of(2026, 12, 31),
+                ContractStatus.DRAFT,
+                null
+        ));
+
+        assertEquals("employer", response.employerId());
+        assertEquals("employer", response.schoolId());
+    }
+
+    @Test
+    void shouldRejectSameOrganizationWhenSchoolTypeIsMissing() {
+        BusinessRuleException error = assertThrows(BusinessRuleException.class, () -> service.create(request(
+                "employer",
+                LocalDate.of(2026, 12, 31),
+                ContractStatus.DRAFT,
+                null
+        )));
+
+        assertEquals("schoolId must reference a SCHOOL organization", error.getMessage());
+        verify(contractRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldRejectSameOrganizationWhenEmployerTypeIsMissing() {
+        employer.getOrganizationTypes().clear();
+        employer.getOrganizationTypes().add(new OrganizationTypeEntry(OrganizationType.SCHOOL));
+
+        BusinessRuleException error = assertThrows(BusinessRuleException.class, () -> service.create(request(
+                "employer",
+                LocalDate.of(2026, 12, 31),
+                ContractStatus.DRAFT,
+                null
+        )));
+
+        assertEquals("employerId must reference an EMPLOYER organization", error.getMessage());
+        verify(contractRepository, never()).save(any());
+    }
+
+    @Test
     void shouldAllowExtendingTheEndDate() {
         Contract contract = existingContract(ContractStatus.ACTIVE, LocalDate.of(2026, 12, 31));
         stubUpdate(contract);

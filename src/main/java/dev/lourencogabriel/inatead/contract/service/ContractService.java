@@ -221,10 +221,6 @@ public class ContractService extends AbstractCrudService<Contract, ContractDtos.
                 && !contract.getSchool().hasType(OrganizationType.SCHOOL)) {
             throw new BusinessRuleException("schoolId must reference a SCHOOL organization");
         }
-        if (contract.getSchool() != null
-                && contract.getSchool().getId().equals(contract.getEmployer().getId())) {
-            throw new BusinessRuleException("Employer and school must be different organizations");
-        }
         if (contract.getEndDate() != null
                 && contract.getEndDate().isBefore(contract.getStartDate())) {
             throw new BusinessRuleException("Contract end date cannot precede start date");
