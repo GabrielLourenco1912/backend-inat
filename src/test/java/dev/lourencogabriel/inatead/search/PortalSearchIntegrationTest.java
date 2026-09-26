@@ -30,6 +30,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDate;
 import java.util.Set;
 import java.util.List;
@@ -66,31 +67,65 @@ class PortalSearchIntegrationTest {
         var admin = actor("ADMIN");
         for (int i=0; i<30; i++) person("Outra pessoa " + i, LocalDate.of(1990,1,1), PersonTypeCode.GUARDIAN);
         for (int i=0; i<12; i++) person("Maria busca " + i, LocalDate.of(1990,1,1), PersonTypeCode.GUARDIAN);
-        var first = search.search("people", "MARIA BUSCA", 0, 5, null, "guardian", null, true, admin);
-        var second = search.search("people", "MARIA BUSCA", 1, 5, null, "guardian", null, true, admin);
+        var first = search.search("people", "MARIA BUSCA", 0, 5, null, null, "guardian", null, true, admin);
+        var second = search.search("people", "MARIA BUSCA", 1, 5, null, null, "guardian", null, true, admin);
         assertEquals(12, first.totalElements()); assertEquals(3, first.totalPages()); assertEquals(5, first.content().size());
         assertTrue(first.content().stream().noneMatch(second.content()::contains));
-        assertEquals(2, search.search("people", "MARIA BUSCA", 2, 5, null, "guardian", null, true, admin).content().size());
+        assertEquals(2, search.search("people", "MARIA BUSCA", 2, 5, null, null, "guardian", null, true, admin).content().size());
+    }
+    @Test void statusFiltersBeforePaginationWithOrWithoutText() {
+        var admin = actor("ADMIN");
+        for (int i = 0; i < 7; i++) {
+            var candidate = person("Filtro global " + i, LocalDate.of(1990, 1, 1), PersonTypeCode.GUARDIAN);
+            if (i >= 5) candidate.setStatus(RecordStatus.INACTIVE);
+        }
+        em.flush();
+        em.clear();
+
+        var first = search.search("people", "Filtro global", 0, 3, null, "ACTIVE", "", null, false, admin);
+        var second = search.search("people", "Filtro global", 1, 3, null, "ACTIVE", "", null, false, admin);
+        assertEquals(5, first.totalElements());
+        assertEquals(2, first.totalPages());
+        assertEquals(3, first.content().size());
+        assertEquals(2, second.content().size());
+        assertEquals(2, search.search("people", "Filtro global", 0, 20, null, "INACTIVE", "", null, false, admin).totalElements());
+
+        long inactiveCount = em.createQuery("select count(p) from Person p where p.status = :status", Long.class)
+                .setParameter("status", RecordStatus.INACTIVE).getSingleResult();
+        var statusOnly = search.search("people", "", 0, 2, null, "INACTIVE", "", null, false, admin);
+        assertEquals(inactiveCount, statusOnly.totalElements());
+        assertTrue(statusOnly.content().stream().map(PersonDtos.Response.class::cast)
+                .allMatch(person -> person.status() == RecordStatus.INACTIVE));
+        assertEquals(0, search.search("people", "Filtro global", 0, 20, null, "SUSPENDED", "", null, false, admin).totalElements());
+
+        assertThrows(ResponseStatusException.class,
+                () -> search.search("people", "", 0, 20, null, "UNKNOWN", "", null, false, admin));
+        assertThrows(ResponseStatusException.class,
+                () -> search.search("roles", "", 0, 20, null, "ACTIVE", "", null, false, admin));
     }
     @Test void allSearchResourcesCompileBothWithAndWithoutText() {
         var admin = actor("ADMIN");
         for (String resource : List.of("people", "learners", "organizations", "contracts", "cohorts", "lessons", "activities", "notifications", "users", "roles", "document-types")) {
-            assertDoesNotThrow(() -> search.search(resource, "test", 0, 20, null, "", null, false, admin), resource);
-            assertDoesNotThrow(() -> search.search(resource, "", 0, 20, null, "", null, false, admin), resource);
+            assertDoesNotThrow(() -> search.search(resource, "test", 0, 20, null, null, "", null, false, admin), resource);
+            assertDoesNotThrow(() -> search.search(resource, "", 0, 20, null, null, "", null, false, admin), resource);
         }
+        for (String resource : List.of("people", "learners", "organizations", "contracts", "cohorts", "users"))
+            assertDoesNotThrow(() -> search.search(resource, "", 0, 5, null, "ACTIVE", "", null, false, admin), resource);
+        assertDoesNotThrow(() -> search.search("lessons", "", 0, 5, null, "SCHEDULED", "", null, false, admin));
+        assertDoesNotThrow(() -> search.search("activities", "", 0, 5, null, "PUBLISHED", "", null, false, admin));
     }
     @Test void lookupEligibilityAndLiteralWildcardAreAppliedBeforeLimit() {
         var admin = actor("ADMIN");
-        long existingAdultGuardians = search.search("people", "responsável", 0, 5, null, "guardian", null, true, admin).totalElements();
+        long existingAdultGuardians = search.search("people", "responsável", 0, 5, null, null, "guardian", null, true, admin).totalElements();
         for(int i=0;i<6;i++) person("Guardian " + i, LocalDate.now().minusYears(10), PersonTypeCode.GUARDIAN);
         person("Guardian adulto", LocalDate.of(1990,1,1), PersonTypeCode.GUARDIAN);
         person("Literal %_", LocalDate.of(1990,1,1), PersonTypeCode.GUARDIAN);
-        assertEquals(1, search.search("people", "guardian adulto", 0, 5, null, "guardian", null, true, admin).totalElements());
-        assertEquals(existingAdultGuardians + 2, search.search("people", "responsável", 0, 5, null, "guardian", null, true, admin).totalElements());
-        assertEquals(1, search.search("people", "%_", 0, 20, null, "", null, false, admin).totalElements());
-        assertEquals(0, search.search("people", "guardian", 0, 5, "INSTRUCTOR", "member", null, true, admin).totalElements());
+        assertEquals(1, search.search("people", "guardian adulto", 0, 5, null, null, "guardian", null, true, admin).totalElements());
+        assertEquals(existingAdultGuardians + 2, search.search("people", "responsável", 0, 5, null, null, "guardian", null, true, admin).totalElements());
+        assertEquals(1, search.search("people", "%_", 0, 20, null, null, "", null, false, admin).totalElements());
+        assertEquals(0, search.search("people", "guardian", 0, 5, "INSTRUCTOR", null, "member", null, true, admin).totalElements());
         for (String[] pair : List.of(new String[]{"people","instructor"},new String[]{"learners","contract-learner"},new String[]{"organizations","employer"},new String[]{"organizations","school"},new String[]{"organizations","parent"},new String[]{"contracts","enrollment"},new String[]{"cohorts","lesson-cohort"},new String[]{"users","audience-user"},new String[]{"cohorts","audience-cohort"},new String[]{"lessons","activity"}))
-            assertDoesNotThrow(() -> search.search(pair[0], "", 0, 5, null, pair[1], null, true, admin));
+            assertDoesNotThrow(() -> search.search(pair[0], "", 0, 5, null, null, pair[1], null, true, admin));
     }
     @Test void organizationWithBothTypesAppearsInEmployerAndSchoolLookups() {
         var admin = actor("ADMIN");
@@ -109,19 +144,19 @@ class PortalSearchIntegrationTest {
         em.persist(organization);
         em.flush();
 
-        assertEquals(1, search.search("organizations", "Busca Dupla", 0, 5, null, "employer", null, true, admin).totalElements());
-        assertEquals(1, search.search("organizations", "Busca Dupla", 0, 5, null, "school", null, true, admin).totalElements());
+        assertEquals(1, search.search("organizations", "Busca Dupla", 0, 5, null, null, "employer", null, true, admin).totalElements());
+        assertEquals(1, search.search("organizations", "Busca Dupla", 0, 5, null, null, "school", null, true, admin).totalElements());
     }
     @Test void nonAdminQueriesKeepTheirScopeAndDoNotExposeAdminCatalogs() {
         var instructor = actor("INSTRUCTOR");
         for (String resource : List.of("learners", "contracts", "lessons", "activities"))
-            assertEquals(0, search.search(resource, "", 0, 20, null, "", null, false, instructor).totalElements());
+            assertEquals(0, search.search(resource, "", 0, 20, null, null, "", null, false, instructor).totalElements());
         for (String resource : List.of("people", "users", "roles", "cohorts", "notifications"))
-            assertThrows(AccessDeniedException.class, () -> search.search(resource, "", 0, 20, null, "", null, false, instructor));
+            assertThrows(AccessDeniedException.class, () -> search.search(resource, "", 0, 20, null, null, "", null, false, instructor));
         var manager = actor("EMPLOYER_MANAGER");
         for (String resource : List.of("learners", "contracts", "organizations"))
-            assertEquals(0, search.search(resource, "", 0, 20, null, "", null, false, manager).totalElements());
-        assertThrows(AccessDeniedException.class, () -> search.search("learners", "", 0, 5, null, "participant", "unknown", true, instructor));
+            assertEquals(0, search.search(resource, "", 0, 20, null, null, "", null, false, manager).totalElements());
+        assertThrows(AccessDeniedException.class, () -> search.search("learners", "", 0, 5, null, null, "participant", "unknown", true, instructor));
     }
 
     @Test void lookupControllerRejectsMoreThanFiveAndInvalidPages() throws Exception {
@@ -168,13 +203,13 @@ class PortalSearchIntegrationTest {
         }
         em.flush();
         String registration = String.valueOf(eligible.getRegistrationNumber());
-        var result = search.search("learners", registration, 0, 5, null, "participant", lesson.getId(), true, admin);
+        var result = search.search("learners", registration, 0, 5, null, null, "participant", lesson.getId(), true, admin);
         assertEquals(1, result.totalElements());
         assertEquals(eligible.getId(), ((PortalSearchService.Option) result.content().getFirst()).id());
-        assertEquals(0, search.search("learners", registration, 0, 5, null, "participant", lesson.getId(), true, instructor).totalElements(), "Instructor must not enumerate learners outside their scope");
-        assertEquals(1, search.search("lessons", "pesquisável", 0, 20, null, "", null, false, instructor).totalElements());
+        assertEquals(0, search.search("learners", registration, 0, 5, null, null, "participant", lesson.getId(), true, instructor).totalElements(), "Instructor must not enumerate learners outside their scope");
+        assertEquals(1, search.search("lessons", "pesquisável", 0, 20, null, null, "", null, false, instructor).totalElements());
         var other = actor("INSTRUCTOR");
-        assertEquals(0, search.search("lessons", "pesquisável", 0, 20, null, "", null, false, other).totalElements());
-        assertThrows(AccessDeniedException.class, () -> search.search("learners", "", 0, 5, null, "participant", lesson.getId(), true, other));
+        assertEquals(0, search.search("lessons", "pesquisável", 0, 20, null, null, "", null, false, other).totalElements());
+        assertThrows(AccessDeniedException.class, () -> search.search("learners", "", 0, 5, null, null, "participant", lesson.getId(), true, other));
     }
 }

@@ -24,6 +24,11 @@ import dev.lourencogabriel.inatead.user.model.SystemRoleCode;
 import dev.lourencogabriel.inatead.user.repository.UserRepository;
 import dev.lourencogabriel.inatead.document.service.DocumentTypeService;
 import dev.lourencogabriel.inatead.shared.model.UserAccountStatus;
+import dev.lourencogabriel.inatead.shared.model.RecordStatus;
+import dev.lourencogabriel.inatead.shared.model.ContractStatus;
+import dev.lourencogabriel.inatead.shared.model.CohortStatus;
+import dev.lourencogabriel.inatead.shared.model.LessonStatus;
+import dev.lourencogabriel.inatead.shared.model.ActivityStatus;
 import dev.lourencogabriel.inatead.shared.model.DeliveryMode;
 import dev.lourencogabriel.inatead.shared.api.PageResponse;
 import jakarta.persistence.EntityManager;
@@ -43,6 +48,17 @@ import java.util.*;
 @Service
 @RequiredArgsConstructor
 public class PortalSearchService {
+    private static final Map<String, Class<? extends Enum<?>>> STATUS_TYPES = Map.of(
+            "people", RecordStatus.class,
+            "learners", RecordStatus.class,
+            "organizations", RecordStatus.class,
+            "contracts", ContractStatus.class,
+            "cohorts", CohortStatus.class,
+            "lessons", LessonStatus.class,
+            "activities", ActivityStatus.class,
+            "users", UserAccountStatus.class
+    );
+
     private final EntityManager em;
     private final Clock clock;
     private final DomainAuthorization authorization;
@@ -80,7 +96,7 @@ public class PortalSearchService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<Object> search(String resource, String text, int page, int size, String personType,
+    public PageResponse<Object> search(String resource, String text, int page, int size, String personType, String status,
                                       String purpose, String contextId, boolean lookup, Authentication authentication) {
         var spec = resource(resource);
         var userId = authorization.userId(authentication);
@@ -119,6 +135,17 @@ public class PortalSearchService {
             try { params.put("personType", PersonTypeCode.valueOf(personType)); }
             catch (IllegalArgumentException ex) { throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid person type"); }
             where.add("exists (select pt.code from Person p join p.personTypes pt where p = e and pt.code = :personType)");
+        }
+        if (status != null && !status.isBlank()) {
+            var statusType = STATUS_TYPES.get(resource);
+            if (statusType == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Status filter not supported for resource");
+            var requestedStatus = status.trim().toUpperCase(Locale.ROOT);
+            var value = Arrays.stream(statusType.getEnumConstants())
+                    .filter(candidate -> candidate.name().equals(requestedStatus))
+                    .findFirst()
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid status"));
+            params.put("status", value);
+            where.add("e.status = :status");
         }
         if (resource.equals("roles")) where.add("e.code in ('ADMIN', 'INSTRUCTOR', 'LEARNER', 'EMPLOYER_MANAGER')");
         if (lookup) applyPurpose(resource, purpose, contextId, where, params, authentication, admin);

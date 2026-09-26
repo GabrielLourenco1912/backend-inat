@@ -25,8 +25,9 @@ public class PortalSearchController {
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
             @RequestParam(required = false) String personType,
+            @RequestParam(required = false) @Size(max = 32) String status,
             Authentication authentication) {
-        return new ApiResponse<>(service.search(resource, q, page, size, personType, "", null, false, authentication), "Search results");
+        return new ApiResponse<>(service.search(resource, q, page, size, personType, status, "", null, false, authentication), "Search results");
     }
 
     @GetMapping("/api/lookups/{resource}")
@@ -39,6 +40,6 @@ public class PortalSearchController {
             @RequestParam(defaultValue = "") String purpose,
             @RequestParam(required = false) String contextId,
             Authentication authentication) {
-        return new ApiResponse<>(service.search(resource, q, page, size, personType, purpose, contextId, true, authentication), "Lookup results");
+        return new ApiResponse<>(service.search(resource, q, page, size, personType, null, purpose, contextId, true, authentication), "Lookup results");
     }
 }
