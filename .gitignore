@@ -37,3 +37,6 @@ build/
 ### Agents ###
 .agents/
 .codex/
+
+# Local development documentation
+/docs/
