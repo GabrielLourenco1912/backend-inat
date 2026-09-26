@@ -2,8 +2,10 @@ package dev.lourencogabriel.inatead.lesson.service;
 
 import dev.lourencogabriel.inatead.activity.model.Activity;
 import dev.lourencogabriel.inatead.activity.model.ActivitySubmission;
+import dev.lourencogabriel.inatead.activity.dto.ActivitySubmissionDtos;
 import dev.lourencogabriel.inatead.activity.repository.ActivityRepository;
 import dev.lourencogabriel.inatead.activity.repository.ActivitySubmissionRepository;
+import dev.lourencogabriel.inatead.activity.service.ActivitySubmissionService;
 import dev.lourencogabriel.inatead.address.model.Address;
 import dev.lourencogabriel.inatead.cohort.model.Cohort;
 import dev.lourencogabriel.inatead.cohort.repository.CohortRepository;
@@ -26,19 +28,23 @@ import dev.lourencogabriel.inatead.shared.model.ParticipationStatus;
 import dev.lourencogabriel.inatead.shared.model.SubmissionStatus;
 import dev.lourencogabriel.inatead.user.model.User;
 import dev.lourencogabriel.inatead.user.repository.UserRepository;
+import org.springframework.data.domain.PageRequest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -47,6 +53,8 @@ class OnlineLessonAttendanceIntegrationTest {
 
     @Autowired
     private OnlineLessonAttendanceService service;
+    @Autowired
+    private ActivitySubmissionService submissionService;
     @Autowired
     private PersonRepository personRepository;
     @Autowired
@@ -67,7 +75,7 @@ class OnlineLessonAttendanceIntegrationTest {
     private AttendanceRecordRepository attendanceRepository;
 
     @Test
-    void shouldCreateAnAbsenceAtLessonEndAndUpdateItAfterTheLastDelivery() {
+    void shouldConvertAbsenceOnlyAfterEveryOnlineActivityIsGradedAboveSix() {
         String suffix = UUID.randomUUID().toString().replace("-", "");
         Person person = personRepository.save(person(suffix));
 
@@ -98,7 +106,7 @@ class OnlineLessonAttendanceIntegrationTest {
         lesson.setEndsAt(Instant.parse("2026-09-06T15:00:00Z"));
         lesson.setDeliveryMode(DeliveryMode.ONLINE);
         lesson.setMeetingUrl("https://example.com/online-lesson");
-        lesson.setStatus(LessonStatus.SCHEDULED);
+        lesson.setStatus(LessonStatus.COMPLETED);
         lesson = lessonRepository.save(lesson);
 
         LessonParticipant participant = new LessonParticipant();
@@ -122,7 +130,14 @@ class OnlineLessonAttendanceIntegrationTest {
                 firstActivity,
                 learner
         ));
-        service.recordWhenAllActivitiesAreDelivered(firstSubmission, user.getUlid());
+        ActivitySubmission secondSubmission = submissionRepository.save(submission(
+                secondActivity,
+                learner
+        ));
+        assertEquals(List.of(), presenceCandidates());
+        assertFalse(service.recordQualifiedAttendance(
+                participant.getId(), lesson.getEndsAt().plusSeconds(30)
+        ));
         assertFalse(attendanceRepository.existsByLessonParticipant_Id(participant.getId()));
 
         assertEquals(
@@ -137,11 +152,17 @@ class OnlineLessonAttendanceIntegrationTest {
                 .orElseThrow();
         assertEquals(AttendanceStatus.ABSENT, absence.getStatus());
 
-        ActivitySubmission secondSubmission = submissionRepository.save(submission(
-                secondActivity,
-                learner
+        submissionService.grade(firstSubmission.getId(),
+                new ActivitySubmissionDtos.GradeRequest(new BigDecimal("7.00"), null, SubmissionStatus.GRADED),
+                user.getUlid());
+        assertEquals(List.of(), presenceCandidates());
+        submissionService.grade(secondSubmission.getId(),
+                new ActivitySubmissionDtos.GradeRequest(new BigDecimal("8.00"), null, SubmissionStatus.GRADED),
+                user.getUlid());
+        assertEquals(List.of(participant.getId()), presenceCandidates());
+        assertTrue(service.recordQualifiedAttendance(
+                participant.getId(), lesson.getEndsAt().plusSeconds(120)
         ));
-        service.recordWhenAllActivitiesAreDelivered(secondSubmission, user.getUlid());
 
         List<AttendanceRecord> records = attendanceRepository
                 .findAllByLessonParticipant_Lesson_IdOrderByRecordedAtAsc(lesson.getId());
@@ -151,6 +172,22 @@ class OnlineLessonAttendanceIntegrationTest {
         assertEquals(lesson.getStartsAt(), attendance.getCheckInAt());
         assertEquals(lesson.getEndsAt(), attendance.getCheckOutAt());
         assertEquals(participant.getId(), attendance.getLessonParticipant().getId());
+        assertEquals(List.of(), presenceCandidates());
+    }
+
+    private List<String> presenceCandidates() {
+        return participantRepository.findOnlinePresenceCandidateIds(
+                "",
+                ParticipationStatus.EXPECTED,
+                DeliveryMode.ONLINE,
+                Set.of(LessonStatus.IN_PROGRESS, LessonStatus.COMPLETED),
+                OnlineLessonAttendanceService.REQUIRED_ACTIVITY_STATUSES,
+                SubmissionStatus.GRADED,
+                OnlineLessonAttendanceService.MINIMUM_PASSING_SCORE,
+                AttendanceStatus.ABSENT,
+                OnlineLessonAttendanceService.AUTOMATIC_ABSENCE_NOTES,
+                PageRequest.of(0, 200)
+        );
     }
 
     private Person person(String suffix) {
@@ -180,6 +217,7 @@ class OnlineLessonAttendanceIntegrationTest {
         activity.setDescription("Required online activity");
         activity.setAvailableAt(lesson.getStartsAt());
         activity.setDueAt(lesson.getEndsAt());
+        activity.setMaxScore(new BigDecimal("10.00"));
         activity.setStatus(ActivityStatus.PUBLISHED);
         return activity;
     }

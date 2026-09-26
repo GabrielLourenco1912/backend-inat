@@ -4,7 +4,11 @@ import dev.lourencogabriel.inatead.lesson.model.LessonParticipant;
 import dev.lourencogabriel.inatead.shared.model.LessonStatus;
 import dev.lourencogabriel.inatead.shared.model.DeliveryMode;
 import dev.lourencogabriel.inatead.shared.model.ParticipationStatus;
+import dev.lourencogabriel.inatead.shared.model.ActivityStatus;
+import dev.lourencogabriel.inatead.shared.model.AttendanceStatus;
+import dev.lourencogabriel.inatead.shared.model.SubmissionStatus;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -12,6 +16,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.Collection;
@@ -59,6 +64,70 @@ public interface LessonParticipantRepository extends JpaRepository<LessonPartici
             @Param("lessonId") String lessonId,
             @Param("learnerId") String learnerId
     );
+
+    @Query("""
+            select participant.id
+            from LessonParticipant participant
+            join participant.lesson lesson
+            where participant.id > :afterId
+              and participant.status = :expectedParticipation
+              and lesson.deliveryMode = :onlineMode
+              and lesson.status in :eligibleLessonStatuses
+              and exists (
+                  select activity.id from Activity activity
+                  where activity.lesson = lesson
+                    and activity.status in :requiredActivityStatuses
+              )
+              and not exists (
+                  select activity.id from Activity activity
+                  where activity.lesson = lesson
+                    and activity.status in :requiredActivityStatuses
+                    and not exists (
+                        select submission.id from ActivitySubmission submission
+                        where submission.activity = activity
+                          and submission.learner = participant.learner
+                          and submission.status = :gradedStatus
+                          and submission.score > :minimumScore
+                          and submission.submittedAt is not null
+                          and submission.gradedAt is not null
+                    )
+              )
+              and (
+                  not exists (
+                      select attendance.id from AttendanceRecord attendance
+                      where attendance.lessonParticipant = participant
+                  )
+                  or exists (
+                      select attendance.id from AttendanceRecord attendance
+                      where attendance.lessonParticipant = participant
+                        and attendance.status = :absentStatus
+                        and attendance.notes in :automaticAbsenceNotes
+                  )
+              )
+            order by participant.id
+            """)
+    List<String> findOnlinePresenceCandidateIds(
+            @Param("afterId") String afterId,
+            @Param("expectedParticipation") ParticipationStatus expectedParticipation,
+            @Param("onlineMode") DeliveryMode onlineMode,
+            @Param("eligibleLessonStatuses") Collection<LessonStatus> eligibleLessonStatuses,
+            @Param("requiredActivityStatuses") Collection<ActivityStatus> requiredActivityStatuses,
+            @Param("gradedStatus") SubmissionStatus gradedStatus,
+            @Param("minimumScore") BigDecimal minimumScore,
+            @Param("absentStatus") AttendanceStatus absentStatus,
+            @Param("automaticAbsenceNotes") Collection<String> automaticAbsenceNotes,
+            Pageable pageable
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select participant
+            from LessonParticipant participant
+            join fetch participant.lesson lesson
+            join fetch lesson.instructorPerson
+            where participant.id = :id
+            """)
+    Optional<LessonParticipant> findByIdForOnlinePresence(@Param("id") String id);
 
     @Query("""
             select (count(participant) > 0)

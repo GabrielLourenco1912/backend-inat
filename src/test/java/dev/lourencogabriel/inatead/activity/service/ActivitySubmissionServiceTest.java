@@ -11,7 +11,6 @@ import dev.lourencogabriel.inatead.learner.repository.LearnerRepository;
 import dev.lourencogabriel.inatead.lesson.model.Lesson;
 import dev.lourencogabriel.inatead.lesson.model.LessonParticipant;
 import dev.lourencogabriel.inatead.lesson.repository.LessonParticipantRepository;
-import dev.lourencogabriel.inatead.lesson.service.OnlineLessonAttendanceService;
 import dev.lourencogabriel.inatead.person.model.Person;
 import dev.lourencogabriel.inatead.shared.model.ActivityStatus;
 import dev.lourencogabriel.inatead.shared.model.LessonStatus;
@@ -50,8 +49,6 @@ class ActivitySubmissionServiceTest {
     private UserRepository userRepository;
     @Mock
     private ActivityNotificationService notificationService;
-    @Mock
-    private OnlineLessonAttendanceService onlineLessonAttendanceService;
 
     private ActivitySubmissionService service;
 
@@ -63,8 +60,7 @@ class ActivitySubmissionServiceTest {
                 this.learnerRepository,
                 this.participantRepository,
                 this.userRepository,
-                this.notificationService,
-                this.onlineLessonAttendanceService
+                this.notificationService
         );
     }
 
@@ -73,15 +69,10 @@ class ActivitySubmissionServiceTest {
         stubDependencies();
 
         ActivitySubmissionDtos.Response response = this.service.create(
-                request(SubmissionStatus.SUBMITTED),
-                "actor-user"
+                request(SubmissionStatus.SUBMITTED)
         );
 
         assertEquals(SubmissionStatus.SUBMITTED, response.status());
-        verify(this.onlineLessonAttendanceService).recordWhenAllActivitiesAreDelivered(
-                any(ActivitySubmission.class),
-                org.mockito.ArgumentMatchers.eq("actor-user")
-        );
         verify(this.notificationService).notifySubmitted(any(ActivitySubmission.class));
     }
 
@@ -89,10 +80,8 @@ class ActivitySubmissionServiceTest {
     void shouldNotNotifyInstructorForDraftSubmission() {
         stubDependencies();
 
-        this.service.create(request(SubmissionStatus.DRAFT), "actor-user");
+        this.service.create(request(SubmissionStatus.DRAFT));
 
-        verify(this.onlineLessonAttendanceService, never())
-                .recordWhenAllActivitiesAreDelivered(any(), any());
         verify(this.notificationService, never()).notifySubmitted(any(ActivitySubmission.class));
     }
 
@@ -103,8 +92,7 @@ class ActivitySubmissionServiceTest {
         activity.setDueAt(Instant.parse("2000-01-01T00:00:00Z"));
 
         ActivitySubmissionDtos.Response response = this.service.create(
-                request(SubmissionStatus.SUBMITTED),
-                "actor-user"
+                request(SubmissionStatus.SUBMITTED)
         );
 
         assertEquals(SubmissionStatus.LATE, response.status());
@@ -133,7 +121,7 @@ class ActivitySubmissionServiceTest {
 
         BusinessRuleException exception = assertThrows(
                 BusinessRuleException.class,
-                () -> this.service.create(request(SubmissionStatus.SUBMITTED), "actor-user")
+                () -> this.service.create(request(SubmissionStatus.SUBMITTED))
         );
 
         assertEquals("Submissions are blocked for a cancelled lesson", exception.getMessage());
@@ -162,7 +150,7 @@ class ActivitySubmissionServiceTest {
 
         BusinessRuleException exception = assertThrows(
                 BusinessRuleException.class,
-                () -> this.service.create(request(SubmissionStatus.SUBMITTED), "actor-user")
+                () -> this.service.create(request(SubmissionStatus.SUBMITTED))
         );
 
         assertEquals(
@@ -170,8 +158,6 @@ class ActivitySubmissionServiceTest {
                 exception.getMessage()
         );
         verify(this.submissionRepository, never()).save(any(ActivitySubmission.class));
-        verify(this.onlineLessonAttendanceService, never())
-                .recordWhenAllActivitiesAreDelivered(any(), any());
         verify(this.notificationService, never()).notifySubmitted(any(ActivitySubmission.class));
     }
 

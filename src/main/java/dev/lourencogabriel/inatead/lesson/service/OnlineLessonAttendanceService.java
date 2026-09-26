@@ -16,7 +16,6 @@ import dev.lourencogabriel.inatead.shared.model.DeliveryMode;
 import dev.lourencogabriel.inatead.shared.model.LessonStatus;
 import dev.lourencogabriel.inatead.shared.model.ParticipationStatus;
 import dev.lourencogabriel.inatead.shared.model.SubmissionStatus;
-import dev.lourencogabriel.inatead.shared.persistence.EntityLookup;
 import dev.lourencogabriel.inatead.user.model.User;
 import dev.lourencogabriel.inatead.user.repository.UserRepository;
 import dev.lourencogabriel.inatead.web.exception.BusinessRuleException;
@@ -25,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.math.BigDecimal;
 import java.util.Set;
 import java.util.List;
 
@@ -32,19 +32,19 @@ import java.util.List;
 @RequiredArgsConstructor
 public class OnlineLessonAttendanceService {
 
-    private static final Set<ActivityStatus> REQUIRED_ACTIVITY_STATUSES = Set.of(
+    static final Set<ActivityStatus> REQUIRED_ACTIVITY_STATUSES = Set.of(
             ActivityStatus.PUBLISHED,
             ActivityStatus.CLOSED
     );
-    private static final Set<SubmissionStatus> DELIVERED_SUBMISSION_STATUSES = Set.of(
-            SubmissionStatus.SUBMITTED,
-            SubmissionStatus.LATE,
-            SubmissionStatus.GRADED
-    );
+    static final BigDecimal MINIMUM_PASSING_SCORE = new BigDecimal("6.00");
     private static final String AUTOMATIC_ATTENDANCE_NOTE =
-            "Automatically recorded after all online lesson activities were submitted";
-    private static final String AUTOMATIC_ABSENCE_NOTE =
-            "Automatically recorded when the online lesson ended without all activities submitted";
+            "Automatically recorded after all online lesson activities were graded above 6";
+    static final String AUTOMATIC_ABSENCE_NOTE =
+            "Automatically recorded when the online lesson ended without qualifying attendance";
+    static final Set<String> AUTOMATIC_ABSENCE_NOTES = Set.of(
+            AUTOMATIC_ABSENCE_NOTE,
+            "Automatically recorded when the online lesson ended without all activities submitted"
+    );
 
     private final ActivityRepository activityRepository;
     private final ActivitySubmissionRepository submissionRepository;
@@ -55,28 +55,22 @@ public class OnlineLessonAttendanceService {
     private final OnlineAttendanceClosingPolicy attendanceClosingPolicy;
 
     @Transactional
-    public void recordWhenAllActivitiesAreDelivered(
-            ActivitySubmission submission,
-            String actorUserId
-    ) {
-        if (!DELIVERED_SUBMISSION_STATUSES.contains(submission.getStatus())) {
-            return;
-        }
-
-        Lesson lesson = submission.getActivity().getLesson();
-        if (lesson.getDeliveryMode() != DeliveryMode.ONLINE
-                || lesson.getStatus() == LessonStatus.CANCELLED) {
-            return;
-        }
-
-        String learnerId = submission.getLearner().getId();
+    public boolean recordQualifiedAttendance(String participantId, Instant recordedAt) {
         LessonParticipant participant = participantRepository
-                .findByLessonAndLearnerForUpdate(lesson.getId(), learnerId)
-                .orElseThrow(() -> new BusinessRuleException(
-                        "The learner is not listed in the online lesson"
-                ));
-        if (participant.getStatus() == ParticipationStatus.CANCELLED) {
-            return;
+                .findByIdForOnlinePresence(participantId)
+                .orElseThrow(() -> new BusinessRuleException("Online lesson participant not found"));
+        Lesson lesson = participant.getLesson();
+        if (participant.getStatus() != ParticipationStatus.EXPECTED
+                || lesson.getDeliveryMode() != DeliveryMode.ONLINE
+                || lesson.getStatus() == LessonStatus.SCHEDULED
+                || lesson.getStatus() == LessonStatus.CANCELLED) {
+            return false;
+        }
+        AttendanceRecord existing = attendanceRepository
+                .findByLessonParticipant_Id(participantId).orElse(null);
+        if (existing != null && (existing.getStatus() != AttendanceStatus.ABSENT
+                || !AUTOMATIC_ABSENCE_NOTES.contains(existing.getNotes()))) {
+            return false;
         }
 
         long requiredActivities = activityRepository.countByLesson_IdAndStatusIn(
@@ -84,47 +78,43 @@ public class OnlineLessonAttendanceService {
                 REQUIRED_ACTIVITY_STATUSES
         );
         if (requiredActivities == 0) {
-            return;
+            return false;
         }
 
+        String learnerId = participant.getLearner().getId();
         Instant cutoff = attendanceClosingPolicy.submissionCutoffFor(participant).orElse(null);
-        long deliveredActivities = cutoff == null
-                ? submissionRepository
-                .countByActivity_Lesson_IdAndLearner_IdAndActivity_StatusInAndStatusIn(
-                        lesson.getId(),
-                        learnerId,
-                        REQUIRED_ACTIVITY_STATUSES,
-                        DELIVERED_SUBMISSION_STATUSES
-                )
-                : submissionRepository
-                .countByActivity_Lesson_IdAndLearner_IdAndActivity_StatusInAndStatusInAndSubmittedAtBefore(
-                        lesson.getId(),
-                        learnerId,
-                        REQUIRED_ACTIVITY_STATUSES,
-                        DELIVERED_SUBMISSION_STATUSES,
-                        cutoff
+        List<ActivitySubmission> submissions = submissionRepository
+                .findAllByActivity_Lesson_IdAndLearner_IdAndActivity_StatusIn(
+                        lesson.getId(), learnerId, REQUIRED_ACTIVITY_STATUSES
                 );
-        if (deliveredActivities != requiredActivities) {
-            return;
+        if (submissions.size() != requiredActivities
+                || submissions.stream().anyMatch(submission -> !qualifies(submission, cutoff))) {
+            return false;
         }
 
-        AttendanceRecord attendance = attendanceRepository
-                .findByLessonParticipant_Id(participant.getId())
-                .orElseGet(AttendanceRecord::new);
+        User instructor = userRepository.findByPerson_Id(lesson.getInstructorPerson().getId())
+                .orElseThrow(() -> new BusinessRuleException(
+                        "The online lesson instructor has no user account"
+                ));
+        AttendanceRecord attendance = existing == null ? new AttendanceRecord() : existing;
         attendance.setLessonParticipant(participant);
-        attendance.setRecordedByUser(EntityLookup.require(
-                userRepository,
-                actorUserId,
-                "Attendance recording user"
-        ));
+        attendance.setRecordedByUser(instructor);
         attendance.setStatus(AttendanceStatus.PRESENT);
         attendance.setCheckInAt(lesson.getStartsAt());
         attendance.setCheckOutAt(lesson.getEndsAt());
-        if (attendance.getRecordedAt() == null) {
-            attendance.setRecordedAt(Instant.now());
-        }
+        attendance.setRecordedAt(recordedAt);
         attendance.setNotes(AUTOMATIC_ATTENDANCE_NOTE);
         attendanceRepository.save(attendance);
+        return true;
+    }
+
+    private boolean qualifies(ActivitySubmission submission, Instant cutoff) {
+        return submission.getStatus() == SubmissionStatus.GRADED
+                && submission.getGradedAt() != null
+                && submission.getScore() != null
+                && submission.getScore().compareTo(MINIMUM_PASSING_SCORE) > 0
+                && submission.getSubmittedAt() != null
+                && (cutoff == null || submission.getSubmittedAt().isBefore(cutoff));
     }
 
     @Transactional

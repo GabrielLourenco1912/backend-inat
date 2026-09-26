@@ -38,11 +38,10 @@ public class ActivitySubmissionController {
     @PostMapping
     @PreAuthorize("@domainAuthorization.canCreateSubmission(authentication, #request.activityId(), #request.learnerId())")
     public ApiResponse<ActivitySubmissionDtos.Response> create(
-            @Valid @RequestBody ActivitySubmissionDtos.SaveRequest request,
-            Authentication authentication
+            @Valid @RequestBody ActivitySubmissionDtos.SaveRequest request
     ) {
         return new ApiResponse<>(
-                service.create(request, authorization.userId(authentication)),
+                service.create(request),
                 "Submission created"
         );
     }
@@ -88,11 +87,10 @@ public class ActivitySubmissionController {
     @PreAuthorize("@domainAuthorization.canEditSubmission(authentication, #id)")
     public ApiResponse<ActivitySubmissionDtos.Response> update(
             @PathVariable String id,
-            @Valid @RequestBody ActivitySubmissionDtos.SaveRequest request,
-            Authentication authentication
+            @Valid @RequestBody ActivitySubmissionDtos.SaveRequest request
     ) {
         return new ApiResponse<>(
-                service.update(id, request, authorization.userId(authentication)),
+                service.update(id, request),
                 "Submission updated"
         );
     }

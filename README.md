@@ -172,19 +172,18 @@ Destinatários do canal `EMAIL` são processados em segundo plano. O dispatcher 
 
 ### Frequência automática em aulas online
 
-Depois de uma entrega mudar para `SUBMITTED` ou `LATE`, o backend verifica a conclusão da aula para aquele aprendiz:
+O `AcademicLifecycleScheduler` verifica a presença automática a cada 60 segundos, por padrão. A entrega em `SUBMITTED` ou `LATE` apenas registra o envio e notifica o instrutor:
 
-- a regra é executada somente quando `lessons.delivery_mode` é `ONLINE`; aulas `ONSITE` nunca recebem frequência por entrega;
+- a regra é executada somente quando `lessons.delivery_mode` é `ONLINE` e a aula está em `IN_PROGRESS` ou `COMPLETED`;
 - é necessário existir ao menos uma atividade `PUBLISHED` ou `CLOSED` na aula; atividades `DRAFT` e `CANCELLED` não entram no conjunto obrigatório;
-- cada atividade obrigatória precisa possuir uma entrega do aprendiz em `SUBMITTED`, `LATE` ou `GRADED`; `DRAFT` e `RETURNED` ainda não concluem o conjunto;
-- quando todas estiverem entregues, é criado um único `attendance_record` com estado `PRESENT`, `checkInAt` igual a `lesson.startsAt` e `checkOutAt` igual a `lesson.endsAt`;
+- cada atividade obrigatória precisa possuir uma entrega do aprendiz em `GRADED`, com `gradedAt` preenchido e nota **estritamente maior que 6**; notas iguais a 6, entregas ainda não corrigidas e atividades sem `maxScore` não geram presença automática;
+- quando todas estiverem corrigidas e aprovadas, é criado um único `attendance_record` com estado `PRESENT`, `checkInAt` igual a `lesson.startsAt` e `checkOutAt` igual a `lesson.endsAt`;
 - quando a empresa do contrato informa `attendanceClosingDay`, só contam entregas feitas até o fim desse dia no ciclo da aula: aulas no dia do fechamento ou antes usam o mês atual, e aulas posteriores usam o mês seguinte. Dias inexistentes no mês são ajustados para o último dia;
-- sem `attendanceClosingDay`, todas as entregas continuam sendo consideradas, como antes. O limite afeta somente a presença automática e não impede nem altera submissões posteriores;
-- o usuário autenticado que realizou a última entrega fica registrado em `recordedByUser`;
-- o participante é bloqueado durante a verificação para impedir duplicidade em entregas concorrentes;
-- uma frequência preexistente é atualizada no mesmo registro quando a conclusão válida das atividades gera presença.
+- sem `attendanceClosingDay`, não há corte por data de entrega. O limite afeta somente a presença automática e não impede nem altera submissões posteriores;
+- o instrutor da aula fica registrado em `recordedByUser`; o participante é bloqueado durante a verificação para evitar duplicidade;
+- após o fim da aula, o scheduler registra `ABSENT` para participantes esperados sem frequência. Se todas as atividades forem corrigidas e aprovadas depois, essa falta automática é convertida em `PRESENT`; lançamentos manuais de frequência são preservados.
 
-O lançamento ou a correção manual de frequência é bloqueado enquanto a aula estiver `SCHEDULED`; aulas `IN_PROGRESS` e `COMPLETED` aceitam o registro. Essa restrição não se aplica à automação descrita acima.
+O lançamento ou a correção manual de frequência é bloqueado enquanto a aula estiver `SCHEDULED`; aulas `IN_PROGRESS` e `COMPLETED` aceitam o registro.
 
 O domínio de modalidade aceita exclusivamente `ONSITE` ou `ONLINE` nas requisições de aula.
 

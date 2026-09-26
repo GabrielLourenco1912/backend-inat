@@ -8,7 +8,6 @@ import dev.lourencogabriel.inatead.activity.repository.ActivitySubmissionReposit
 import dev.lourencogabriel.inatead.learner.repository.LearnerRepository;
 import dev.lourencogabriel.inatead.lesson.model.LessonParticipant;
 import dev.lourencogabriel.inatead.lesson.repository.LessonParticipantRepository;
-import dev.lourencogabriel.inatead.lesson.service.OnlineLessonAttendanceService;
 import dev.lourencogabriel.inatead.shared.api.PageResponse;
 import dev.lourencogabriel.inatead.shared.model.ActivityStatus;
 import dev.lourencogabriel.inatead.shared.model.CohortStatus;
@@ -41,13 +40,9 @@ public class ActivitySubmissionService {
     private final LessonParticipantRepository participantRepository;
     private final UserRepository userRepository;
     private final ActivityNotificationService notificationService;
-    private final OnlineLessonAttendanceService onlineLessonAttendanceService;
 
     @Transactional
-    public ActivitySubmissionDtos.Response create(
-            ActivitySubmissionDtos.SaveRequest request,
-            String actorUserId
-    ) {
+    public ActivitySubmissionDtos.Response create(ActivitySubmissionDtos.SaveRequest request) {
         if (submissionRepository.existsByActivity_IdAndLearner_Id(
                 request.activityId(),
                 request.learnerId()
@@ -58,7 +53,7 @@ public class ActivitySubmissionService {
         applyLearnerSave(submission, request);
         validateLearnerSave(submission);
         ActivitySubmission saved = submissionRepository.save(submission);
-        processSubmitted(saved, actorUserId);
+        notifySubmitted(saved);
         return toResponse(saved);
     }
 
@@ -95,8 +90,7 @@ public class ActivitySubmissionService {
     @Transactional
     public ActivitySubmissionDtos.Response update(
             String id,
-            ActivitySubmissionDtos.SaveRequest request,
-            String actorUserId
+            ActivitySubmissionDtos.SaveRequest request
     ) {
         ActivitySubmission submission = require(id);
         if (!submission.getActivity().getId().equals(request.activityId())
@@ -112,7 +106,7 @@ public class ActivitySubmissionService {
         applyLearnerSave(submission, request);
         validateLearnerSave(submission);
         ActivitySubmission saved = submissionRepository.save(submission);
-        processSubmitted(saved, actorUserId);
+        notifySubmitted(saved);
         return toResponse(saved);
     }
 
@@ -262,13 +256,9 @@ public class ActivitySubmissionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Activity submission", id));
     }
 
-    private void processSubmitted(ActivitySubmission submission, String actorUserId) {
+    private void notifySubmitted(ActivitySubmission submission) {
         if (submission.getStatus() == SubmissionStatus.SUBMITTED
                 || submission.getStatus() == SubmissionStatus.LATE) {
-            this.onlineLessonAttendanceService.recordWhenAllActivitiesAreDelivered(
-                    submission,
-                    actorUserId
-            );
             this.notificationService.notifySubmitted(submission);
         }
     }

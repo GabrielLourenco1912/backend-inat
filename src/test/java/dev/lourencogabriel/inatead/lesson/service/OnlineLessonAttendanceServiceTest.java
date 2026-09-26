@@ -1,6 +1,5 @@
 package dev.lourencogabriel.inatead.lesson.service;
 
-import dev.lourencogabriel.inatead.activity.model.Activity;
 import dev.lourencogabriel.inatead.activity.model.ActivitySubmission;
 import dev.lourencogabriel.inatead.activity.repository.ActivityRepository;
 import dev.lourencogabriel.inatead.activity.repository.ActivitySubmissionRepository;
@@ -13,7 +12,6 @@ import dev.lourencogabriel.inatead.lesson.repository.LessonParticipantRepository
 import dev.lourencogabriel.inatead.lesson.repository.LessonRepository;
 import dev.lourencogabriel.inatead.person.model.Person;
 import dev.lourencogabriel.inatead.project.OnlineAttendanceClosingPolicy;
-import dev.lourencogabriel.inatead.shared.model.ActivityStatus;
 import dev.lourencogabriel.inatead.shared.model.AttendanceStatus;
 import dev.lourencogabriel.inatead.shared.model.DeliveryMode;
 import dev.lourencogabriel.inatead.shared.model.LessonStatus;
@@ -29,14 +27,15 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.Optional;
-import java.util.Set;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -46,269 +45,188 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class OnlineLessonAttendanceServiceTest {
 
-    private static final Set<ActivityStatus> REQUIRED_ACTIVITY_STATUSES = Set.of(
-            ActivityStatus.PUBLISHED,
-            ActivityStatus.CLOSED
-    );
-    private static final Set<SubmissionStatus> DELIVERED_SUBMISSION_STATUSES = Set.of(
-            SubmissionStatus.SUBMITTED,
-            SubmissionStatus.LATE,
-            SubmissionStatus.GRADED
-    );
+    private static final Instant NOW = Instant.parse("2026-09-07T12:00:00Z");
+    private static final Instant SUBMITTED_AT = Instant.parse("2026-09-06T14:30:00Z");
 
-    @Mock
-    private ActivityRepository activityRepository;
-    @Mock
-    private ActivitySubmissionRepository submissionRepository;
-    @Mock
-    private LessonParticipantRepository participantRepository;
-    @Mock
-    private AttendanceRecordRepository attendanceRepository;
-    @Mock
-    private LessonRepository lessonRepository;
-    @Mock
-    private UserRepository userRepository;
-    @Mock
-    private OnlineAttendanceClosingPolicy attendanceClosingPolicy;
-    @InjectMocks
-    private OnlineLessonAttendanceService service;
+    @Mock private ActivityRepository activityRepository;
+    @Mock private ActivitySubmissionRepository submissionRepository;
+    @Mock private LessonParticipantRepository participantRepository;
+    @Mock private AttendanceRecordRepository attendanceRepository;
+    @Mock private LessonRepository lessonRepository;
+    @Mock private UserRepository userRepository;
+    @Mock private OnlineAttendanceClosingPolicy attendanceClosingPolicy;
+    @InjectMocks private OnlineLessonAttendanceService service;
 
     private Lesson lesson;
     private LessonParticipant participant;
-    private ActivitySubmission submission;
+    private User instructor;
 
     @BeforeEach
     void setUp() {
-        this.lesson = new Lesson();
-        this.lesson.setId("lesson-1");
-        this.lesson.setDeliveryMode(DeliveryMode.ONLINE);
-        this.lesson.setStartsAt(Instant.parse("2026-09-06T13:00:00Z"));
-        this.lesson.setEndsAt(Instant.parse("2026-09-06T15:00:00Z"));
-
-        Activity activity = new Activity();
-        activity.setId("activity-1");
-        activity.setLesson(this.lesson);
-        activity.setStatus(ActivityStatus.PUBLISHED);
+        lesson = new Lesson();
+        lesson.setId("lesson-1");
+        lesson.setDeliveryMode(DeliveryMode.ONLINE);
+        lesson.setStatus(LessonStatus.COMPLETED);
+        lesson.setStartsAt(Instant.parse("2026-09-06T13:00:00Z"));
+        lesson.setEndsAt(Instant.parse("2026-09-06T15:00:00Z"));
+        Person instructorPerson = new Person();
+        instructorPerson.setId("instructor-person");
+        lesson.setInstructorPerson(instructorPerson);
 
         Learner learner = new Learner();
         learner.setId("learner-1");
-
-        this.participant = new LessonParticipant();
-        this.participant.setId("participant-1");
-        this.participant.setLesson(this.lesson);
-        this.participant.setLearner(learner);
-        this.participant.setStatus(ParticipationStatus.EXPECTED);
-
-        this.submission = new ActivitySubmission();
-        this.submission.setActivity(activity);
-        this.submission.setLearner(learner);
-        this.submission.setStatus(SubmissionStatus.SUBMITTED);
+        participant = new LessonParticipant();
+        participant.setId("participant-1");
+        participant.setLesson(lesson);
+        participant.setLearner(learner);
+        participant.setStatus(ParticipationStatus.EXPECTED);
+        instructor = new User("Instructor", "instructor@example.com", "hash");
     }
 
     @Test
-    void shouldRecordPresenceWhenTheOnlyOnlineActivityIsDelivered() {
-        User actor = new User("Actor", "actor@example.com", "hash");
-        actor.setUlid("actor-user");
-        when(participantRepository.findByLessonAndLearnerForUpdate(
-                "lesson-1",
-                "learner-1"
-        )).thenReturn(Optional.of(this.participant));
-        when(activityRepository.countByLesson_IdAndStatusIn(
-                "lesson-1",
-                REQUIRED_ACTIVITY_STATUSES
-        )).thenReturn(1L);
-        when(submissionRepository
-                .countByActivity_Lesson_IdAndLearner_IdAndActivity_StatusInAndStatusIn(
-                        "lesson-1",
-                        "learner-1",
-                        REQUIRED_ACTIVITY_STATUSES,
-                        DELIVERED_SUBMISSION_STATUSES
-                )).thenReturn(1L);
-        when(attendanceRepository.findByLessonParticipant_Id("participant-1"))
-                .thenReturn(Optional.empty());
-        when(userRepository.findById("actor-user")).thenReturn(Optional.of(actor));
+    void shouldRecordPresenceWhenEveryActivityWasGradedAboveSix() {
+        stubCandidate(null, 2, List.of(graded("6.01"), graded("9.00")), Optional.empty());
+        when(userRepository.findByPerson_Id("instructor-person")).thenReturn(Optional.of(instructor));
 
-        service.recordWhenAllActivitiesAreDelivered(this.submission, "actor-user");
+        assertTrue(service.recordQualifiedAttendance("participant-1", NOW));
 
-        ArgumentCaptor<AttendanceRecord> captor = ArgumentCaptor.forClass(
-                AttendanceRecord.class
-        );
+        ArgumentCaptor<AttendanceRecord> captor = ArgumentCaptor.forClass(AttendanceRecord.class);
         verify(attendanceRepository).save(captor.capture());
         AttendanceRecord attendance = captor.getValue();
         assertEquals(AttendanceStatus.PRESENT, attendance.getStatus());
-        assertEquals(this.lesson.getStartsAt(), attendance.getCheckInAt());
-        assertEquals(this.lesson.getEndsAt(), attendance.getCheckOutAt());
-        assertSame(this.participant, attendance.getLessonParticipant());
-        assertSame(actor, attendance.getRecordedByUser());
-        assertNotNull(attendance.getRecordedAt());
-        assertNotNull(attendance.getNotes());
+        assertEquals(lesson.getStartsAt(), attendance.getCheckInAt());
+        assertEquals(lesson.getEndsAt(), attendance.getCheckOutAt());
+        assertEquals(NOW, attendance.getRecordedAt());
+        assertSame(instructor, attendance.getRecordedByUser());
     }
 
     @Test
-    void shouldWaitUntilEveryOnlineActivityIsDelivered() {
-        when(participantRepository.findByLessonAndLearnerForUpdate(
-                "lesson-1",
-                "learner-1"
-        )).thenReturn(Optional.of(this.participant));
-        when(activityRepository.countByLesson_IdAndStatusIn(
-                "lesson-1",
-                REQUIRED_ACTIVITY_STATUSES
-        )).thenReturn(2L);
-        when(submissionRepository
-                .countByActivity_Lesson_IdAndLearner_IdAndActivity_StatusInAndStatusIn(
-                        "lesson-1",
-                        "learner-1",
-                        REQUIRED_ACTIVITY_STATUSES,
-                        DELIVERED_SUBMISSION_STATUSES
-                )).thenReturn(1L);
+    void shouldWaitUntilEveryActivityIsGraded() {
+        ActivitySubmission ungraded = graded("9.00");
+        ungraded.setStatus(SubmissionStatus.SUBMITTED);
+        ungraded.setScore(null);
+        ungraded.setGradedAt(null);
+        stubCandidate(null, 2, List.of(graded("8.00"), ungraded), Optional.empty());
 
-        service.recordWhenAllActivitiesAreDelivered(this.submission, "actor-user");
-
+        assertFalse(service.recordQualifiedAttendance("participant-1", NOW));
         verify(attendanceRepository, never()).save(any());
         verifyNoInteractions(userRepository);
     }
 
     @Test
-    void shouldOnlyCountDeliveriesBeforeTheEmployerClosingCutoff() {
-        Instant cutoff = Instant.parse("2026-09-21T03:00:00Z");
-        when(participantRepository.findByLessonAndLearnerForUpdate(
-                "lesson-1",
-                "learner-1"
-        )).thenReturn(Optional.of(this.participant));
-        when(activityRepository.countByLesson_IdAndStatusIn(
-                "lesson-1",
-                REQUIRED_ACTIVITY_STATUSES
-        )).thenReturn(1L);
-        when(attendanceClosingPolicy.submissionCutoffFor(this.participant))
-                .thenReturn(Optional.of(cutoff));
-        when(submissionRepository
-                .countByActivity_Lesson_IdAndLearner_IdAndActivity_StatusInAndStatusInAndSubmittedAtBefore(
-                        "lesson-1",
-                        "learner-1",
-                        REQUIRED_ACTIVITY_STATUSES,
-                        DELIVERED_SUBMISSION_STATUSES,
-                        cutoff
-                )).thenReturn(0L);
+    void shouldRejectAGradeEqualToSix() {
+        stubCandidate(null, 2, List.of(graded("8.00"), graded("6.00")), Optional.empty());
 
-        service.recordWhenAllActivitiesAreDelivered(this.submission, "actor-user");
-
+        assertFalse(service.recordQualifiedAttendance("participant-1", NOW));
         verify(attendanceRepository, never()).save(any());
-        verify(submissionRepository, never())
-                .countByActivity_Lesson_IdAndLearner_IdAndActivity_StatusInAndStatusIn(
-                        any(), any(), any(), any()
-                );
-        verifyNoInteractions(userRepository);
     }
 
     @Test
-    void shouldRecordPresenceAfterAllOfMultipleActivitiesAreDelivered() {
-        User actor = new User("Actor", "actor@example.com", "hash");
-        when(participantRepository.findByLessonAndLearnerForUpdate(
-                "lesson-1",
-                "learner-1"
-        )).thenReturn(Optional.of(this.participant));
-        when(activityRepository.countByLesson_IdAndStatusIn(
-                "lesson-1",
-                REQUIRED_ACTIVITY_STATUSES
-        )).thenReturn(3L);
-        when(submissionRepository
-                .countByActivity_Lesson_IdAndLearner_IdAndActivity_StatusInAndStatusIn(
-                        "lesson-1",
-                        "learner-1",
-                        REQUIRED_ACTIVITY_STATUSES,
-                        DELIVERED_SUBMISSION_STATUSES
-                )).thenReturn(3L);
+    void shouldRespectTheEmployerSubmissionCutoff() {
+        stubCandidate(null, 1, List.of(graded("8.00")), Optional.of(SUBMITTED_AT));
+
+        assertFalse(service.recordQualifiedAttendance("participant-1", NOW));
+        verify(attendanceRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldRequireAtLeastOneActivity() {
+        when(participantRepository.findByIdForOnlinePresence("participant-1"))
+                .thenReturn(Optional.of(participant));
         when(attendanceRepository.findByLessonParticipant_Id("participant-1"))
                 .thenReturn(Optional.empty());
-        when(userRepository.findById("actor-user")).thenReturn(Optional.of(actor));
-
-        service.recordWhenAllActivitiesAreDelivered(this.submission, "actor-user");
-
-        verify(attendanceRepository).save(any(AttendanceRecord.class));
-    }
-
-    @Test
-    void shouldNeverGenerateAttendanceForAnOnsiteLesson() {
-        this.lesson.setDeliveryMode(DeliveryMode.ONSITE);
-
-        service.recordWhenAllActivitiesAreDelivered(this.submission, "actor-user");
-
-        verifyNoInteractions(
-                activityRepository,
-                submissionRepository,
-                participantRepository,
-                attendanceRepository,
-                userRepository
-        );
-    }
-
-    @Test
-    void shouldUpdateAnExistingAbsenceWhenAllActivitiesAreDelivered() {
-        User actor = new User("Actor", "actor@example.com", "hash");
-        actor.setUlid("actor-user");
-        Instant originalRecordedAt = Instant.parse("2026-09-06T15:00:00Z");
-        AttendanceRecord existing = new AttendanceRecord();
-        existing.setLessonParticipant(this.participant);
-        existing.setStatus(AttendanceStatus.ABSENT);
-        existing.setRecordedAt(originalRecordedAt);
-        when(participantRepository.findByLessonAndLearnerForUpdate(
-                "lesson-1",
-                "learner-1"
-        )).thenReturn(Optional.of(this.participant));
         when(activityRepository.countByLesson_IdAndStatusIn(
-                "lesson-1",
-                REQUIRED_ACTIVITY_STATUSES
-        )).thenReturn(2L);
-        when(submissionRepository
-                .countByActivity_Lesson_IdAndLearner_IdAndActivity_StatusInAndStatusIn(
-                        "lesson-1",
-                        "learner-1",
-                        REQUIRED_ACTIVITY_STATUSES,
-                        DELIVERED_SUBMISSION_STATUSES
-                )).thenReturn(2L);
-        when(attendanceRepository.findByLessonParticipant_Id("participant-1"))
-                .thenReturn(Optional.of(existing));
-        when(userRepository.findById("actor-user")).thenReturn(Optional.of(actor));
+                "lesson-1", OnlineLessonAttendanceService.REQUIRED_ACTIVITY_STATUSES
+        )).thenReturn(0L);
 
-        service.recordWhenAllActivitiesAreDelivered(this.submission, "actor-user");
+        assertFalse(service.recordQualifiedAttendance("participant-1", NOW));
+        verifyNoInteractions(submissionRepository, userRepository);
+    }
 
+    @Test
+    void shouldNeverRecordAutomaticPresenceForAnOnsiteLesson() {
+        lesson.setDeliveryMode(DeliveryMode.ONSITE);
+        when(participantRepository.findByIdForOnlinePresence("participant-1"))
+                .thenReturn(Optional.of(participant));
+
+        assertFalse(service.recordQualifiedAttendance("participant-1", NOW));
+        verifyNoInteractions(activityRepository, submissionRepository, attendanceRepository, userRepository);
+    }
+
+    @Test
+    void shouldConvertAnAutomaticAbsenceAfterTheGradesQualify() {
+        AttendanceRecord existing = new AttendanceRecord();
+        existing.setStatus(AttendanceStatus.ABSENT);
+        existing.setNotes(OnlineLessonAttendanceService.AUTOMATIC_ABSENCE_NOTE);
+        existing.setRecordedAt(lesson.getEndsAt());
+        stubCandidate(existing, 1, List.of(graded("7.00")), Optional.empty());
+        when(userRepository.findByPerson_Id("instructor-person")).thenReturn(Optional.of(instructor));
+
+        assertTrue(service.recordQualifiedAttendance("participant-1", NOW));
         verify(attendanceRepository).save(existing);
         assertEquals(AttendanceStatus.PRESENT, existing.getStatus());
-        assertEquals(this.lesson.getStartsAt(), existing.getCheckInAt());
-        assertEquals(this.lesson.getEndsAt(), existing.getCheckOutAt());
-        assertEquals(originalRecordedAt, existing.getRecordedAt());
-        assertSame(actor, existing.getRecordedByUser());
+        assertEquals(NOW, existing.getRecordedAt());
     }
 
     @Test
-    void shouldRecordAbsenceForExpectedParticipantsMissingAttendanceAfterTheLessonEnds() {
-        Person instructorPerson = new Person();
-        instructorPerson.setId("instructor-person");
-        this.lesson.setInstructorPerson(instructorPerson);
-        this.lesson.setStatus(LessonStatus.COMPLETED);
-        User instructor = new User("Instructor", "instructor@example.com", "hash");
+    void shouldPreserveManualAttendance() {
+        AttendanceRecord existing = new AttendanceRecord();
+        existing.setStatus(AttendanceStatus.ABSENT);
+        existing.setNotes("Recorded by the instructor");
+        when(participantRepository.findByIdForOnlinePresence("participant-1"))
+                .thenReturn(Optional.of(participant));
+        when(attendanceRepository.findByLessonParticipant_Id("participant-1"))
+                .thenReturn(Optional.of(existing));
+
+        assertFalse(service.recordQualifiedAttendance("participant-1", NOW));
+        verify(attendanceRepository, never()).save(any());
+        verifyNoInteractions(activityRepository, submissionRepository, userRepository);
+    }
+
+    @Test
+    void shouldRecordAbsenceForAnExpectedParticipantAfterTheLessonEnds() {
         when(lessonRepository.findByIdForOnlineAttendance("lesson-1"))
-                .thenReturn(Optional.of(this.lesson));
+                .thenReturn(Optional.of(lesson));
         when(userRepository.findByPerson_Id("instructor-person"))
                 .thenReturn(Optional.of(instructor));
         when(participantRepository.findAllForOnlineAttendance(
-                "lesson-1",
-                ParticipationStatus.EXPECTED
-        )).thenReturn(List.of(this.participant));
+                "lesson-1", ParticipationStatus.EXPECTED
+        )).thenReturn(List.of(participant));
         when(attendanceRepository.findByLessonParticipant_Id("participant-1"))
                 .thenReturn(Optional.empty());
-        Instant recordedAt = Instant.parse("2026-09-06T15:01:00Z");
 
-        int created = service.recordMissingExpectedAttendance("lesson-1", recordedAt);
-
-        assertEquals(1, created);
+        assertEquals(1, service.recordMissingExpectedAttendance("lesson-1", NOW));
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<AttendanceRecord>> captor = ArgumentCaptor.forClass(List.class);
         verify(attendanceRepository).saveAll(captor.capture());
-        AttendanceRecord absence = captor.getValue().getFirst();
-        assertEquals(AttendanceStatus.ABSENT, absence.getStatus());
-        assertEquals(recordedAt, absence.getRecordedAt());
-        assertSame(this.participant, absence.getLessonParticipant());
-        assertSame(instructor, absence.getRecordedByUser());
+        assertEquals(AttendanceStatus.ABSENT, captor.getValue().getFirst().getStatus());
+    }
+
+    private void stubCandidate(
+            AttendanceRecord existing,
+            long requiredActivities,
+            List<ActivitySubmission> submissions,
+            Optional<Instant> cutoff
+    ) {
+        when(participantRepository.findByIdForOnlinePresence("participant-1"))
+                .thenReturn(Optional.of(participant));
+        when(attendanceRepository.findByLessonParticipant_Id("participant-1"))
+                .thenReturn(Optional.ofNullable(existing));
+        when(activityRepository.countByLesson_IdAndStatusIn(
+                "lesson-1", OnlineLessonAttendanceService.REQUIRED_ACTIVITY_STATUSES
+        )).thenReturn(requiredActivities);
+        when(attendanceClosingPolicy.submissionCutoffFor(participant)).thenReturn(cutoff);
+        when(submissionRepository.findAllByActivity_Lesson_IdAndLearner_IdAndActivity_StatusIn(
+                "lesson-1", "learner-1", OnlineLessonAttendanceService.REQUIRED_ACTIVITY_STATUSES
+        )).thenReturn(submissions);
+    }
+
+    private ActivitySubmission graded(String score) {
+        ActivitySubmission submission = new ActivitySubmission();
+        submission.setStatus(SubmissionStatus.GRADED);
+        submission.setScore(new BigDecimal(score));
+        submission.setSubmittedAt(SUBMITTED_AT);
+        submission.setGradedAt(NOW);
+        return submission;
     }
 }

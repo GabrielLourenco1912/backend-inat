@@ -2,11 +2,9 @@ package dev.lourencogabriel.inatead.activity.repository;
 
 import dev.lourencogabriel.inatead.activity.model.ActivitySubmission;
 import dev.lourencogabriel.inatead.shared.model.ActivityStatus;
-import dev.lourencogabriel.inatead.shared.model.SubmissionStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Collection;
-import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -23,18 +21,9 @@ public interface ActivitySubmissionRepository extends JpaRepository<ActivitySubm
 
     List<ActivitySubmission> findAllByActivity_IdOrderByCreatedAtAsc(String activityId);
 
-    long countByActivity_Lesson_IdAndLearner_IdAndActivity_StatusInAndStatusIn(
+    List<ActivitySubmission> findAllByActivity_Lesson_IdAndLearner_IdAndActivity_StatusIn(
             String lessonId,
             String learnerId,
-            Collection<ActivityStatus> activityStatuses,
-            Collection<SubmissionStatus> submissionStatuses
-    );
-
-    long countByActivity_Lesson_IdAndLearner_IdAndActivity_StatusInAndStatusInAndSubmittedAtBefore(
-            String lessonId,
-            String learnerId,
-            Collection<ActivityStatus> activityStatuses,
-            Collection<SubmissionStatus> submissionStatuses,
-            Instant submittedBefore
+            Collection<ActivityStatus> activityStatuses
     );
 }
