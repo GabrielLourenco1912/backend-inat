@@ -51,17 +51,21 @@ public interface LessonRepository extends JpaRepository<Lesson, String> {
     );
 
     @Query("""
-            select distinct lesson.id
+            select lesson.id
             from Lesson lesson
-            join LessonParticipant participant on participant.lesson = lesson
             where lesson.deliveryMode = :deliveryMode
               and lesson.status <> :cancelledLesson
               and lesson.endsAt <= :now
-              and participant.status = :expectedParticipation
-              and not exists (
-                  select attendance.id
-                  from AttendanceRecord attendance
-                  where attendance.lessonParticipant = participant
+              and exists (
+                  select participant.id
+                  from LessonParticipant participant
+                  where participant.lesson = lesson
+                    and participant.status = :expectedParticipation
+                    and not exists (
+                        select attendance.id
+                        from AttendanceRecord attendance
+                        where attendance.lessonParticipant = participant
+                    )
               )
             order by lesson.endsAt, lesson.id
             """)

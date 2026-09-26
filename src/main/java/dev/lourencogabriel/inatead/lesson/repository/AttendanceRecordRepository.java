@@ -26,7 +26,7 @@ public interface AttendanceRecordRepository extends JpaRepository<AttendanceReco
 
     @Query(
             value = """
-                    select distinct attendance
+                    select attendance
                     from AttendanceRecord attendance
                     join attendance.lessonParticipant participant
                     join participant.lesson lesson
@@ -51,7 +51,7 @@ public interface AttendanceRecordRepository extends JpaRepository<AttendanceReco
                     order by lesson.startsAt desc, attendance.id
                     """,
             countQuery = """
-                    select count(distinct attendance)
+                    select count(attendance)
                     from AttendanceRecord attendance
                     join attendance.lessonParticipant participant
                     join participant.lesson lesson

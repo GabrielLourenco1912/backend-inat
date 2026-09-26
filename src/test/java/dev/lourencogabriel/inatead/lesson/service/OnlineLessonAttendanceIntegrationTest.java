@@ -28,6 +28,7 @@ import dev.lourencogabriel.inatead.shared.model.ParticipationStatus;
 import dev.lourencogabriel.inatead.shared.model.SubmissionStatus;
 import dev.lourencogabriel.inatead.user.model.User;
 import dev.lourencogabriel.inatead.user.repository.UserRepository;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -73,6 +74,65 @@ class OnlineLessonAttendanceIntegrationTest {
     private ActivitySubmissionRepository submissionRepository;
     @Autowired
     private AttendanceRecordRepository attendanceRepository;
+
+    @Test
+    void shouldPageLearnerAttendanceAndSelectEachUnrecordedOnlineLessonOnce() {
+        String suffix = UUID.randomUUID().toString().replace("-", "");
+        Person instructor = personRepository.save(person(suffix));
+        Person secondPerson = personRepository.save(person(UUID.randomUUID().toString().replace("-", "")));
+
+        User user = new User("Attendance recorder", suffix + "@example.com", "hash");
+        user.setPerson(instructor);
+        user = userRepository.save(user);
+
+        Learner firstLearner = new Learner();
+        firstLearner.setPerson(instructor);
+        firstLearner = learnerRepository.save(firstLearner);
+        Learner secondLearner = new Learner();
+        secondLearner.setPerson(secondPerson);
+        secondLearner = learnerRepository.save(secondLearner);
+
+        Cohort cohort = new Cohort();
+        cohort.setCode("ATTEND-" + suffix.substring(0, 8));
+        cohort.setName("Attendance query cohort");
+        cohort.setDefaultWeekday(1);
+        cohort.setShiftCode("AFTERNOON");
+        cohort.setStartDate(LocalDate.of(2026, 1, 1));
+        cohort.setEndDate(LocalDate.of(2026, 12, 31));
+        cohort.setStatus(CohortStatus.ACTIVE);
+        cohort = cohortRepository.save(cohort);
+
+        Lesson earlier = lessonRepository.save(onlineLesson(
+                cohort, instructor, "Earlier", "2026-09-06T15:00:00Z"
+        ));
+        Lesson later = lessonRepository.save(onlineLesson(
+                cohort, instructor, "Later", "2026-09-07T15:00:00Z"
+        ));
+        LessonParticipant firstEarlier = participantRepository.save(participant(earlier, firstLearner));
+        LessonParticipant secondEarlier = participantRepository.save(participant(earlier, secondLearner));
+        LessonParticipant firstLater = participantRepository.save(participant(later, firstLearner));
+
+        Instant now = Instant.parse("2026-09-08T00:00:00Z");
+        assertEquals(List.of(earlier.getId(), later.getId()), attendanceCandidates(now, 10));
+        assertEquals(List.of(earlier.getId()), attendanceCandidates(now, 1));
+
+        attendanceRepository.save(attendance(firstEarlier, user, now));
+        attendanceRepository.save(attendance(firstLater, user, now));
+        assertEquals(List.of(earlier.getId()), attendanceCandidates(now, 10));
+
+        Page<AttendanceRecord> firstPage = attendanceRepository.findAllFiltered(
+                null, null, firstLearner.getId(), null, false, null, null, PageRequest.of(0, 1)
+        );
+        Page<AttendanceRecord> secondPage = attendanceRepository.findAllFiltered(
+                null, null, firstLearner.getId(), null, false, null, null, PageRequest.of(1, 1)
+        );
+        assertEquals(2, firstPage.getTotalElements());
+        assertEquals(later.getId(), firstPage.getContent().getFirst().getLessonParticipant().getLesson().getId());
+        assertEquals(earlier.getId(), secondPage.getContent().getFirst().getLessonParticipant().getLesson().getId());
+
+        attendanceRepository.save(attendance(secondEarlier, user, now));
+        assertEquals(List.of(), attendanceCandidates(now, 10));
+    }
 
     @Test
     void shouldConvertAbsenceOnlyAfterEveryOnlineActivityIsGradedAboveSix() {
@@ -187,6 +247,43 @@ class OnlineLessonAttendanceIntegrationTest {
                 OnlineLessonAttendanceService.AUTOMATIC_ABSENCE_NOTES,
                 PageRequest.of(0, 200)
         );
+    }
+
+    private List<String> attendanceCandidates(Instant now, int pageSize) {
+        return lessonRepository.findOnlineAttendanceCandidateIds(
+                now, DeliveryMode.ONLINE, LessonStatus.CANCELLED,
+                ParticipationStatus.EXPECTED, PageRequest.of(0, pageSize)
+        );
+    }
+
+    private Lesson onlineLesson(Cohort cohort, Person instructor, String title, String endsAt) {
+        Lesson lesson = new Lesson();
+        lesson.setCohort(cohort);
+        lesson.setInstructorPerson(instructor);
+        lesson.setTitle(title);
+        lesson.setStartsAt(Instant.parse(endsAt).minusSeconds(7_200));
+        lesson.setEndsAt(Instant.parse(endsAt));
+        lesson.setDeliveryMode(DeliveryMode.ONLINE);
+        lesson.setMeetingUrl("https://example.com/online-lesson");
+        lesson.setStatus(LessonStatus.COMPLETED);
+        return lesson;
+    }
+
+    private LessonParticipant participant(Lesson lesson, Learner learner) {
+        LessonParticipant participant = new LessonParticipant();
+        participant.setLesson(lesson);
+        participant.setLearner(learner);
+        participant.setStatus(ParticipationStatus.EXPECTED);
+        return participant;
+    }
+
+    private AttendanceRecord attendance(LessonParticipant participant, User user, Instant recordedAt) {
+        AttendanceRecord attendance = new AttendanceRecord();
+        attendance.setLessonParticipant(participant);
+        attendance.setRecordedByUser(user);
+        attendance.setStatus(AttendanceStatus.PRESENT);
+        attendance.setRecordedAt(recordedAt);
+        return attendance;
     }
 
     private Person person(String suffix) {
