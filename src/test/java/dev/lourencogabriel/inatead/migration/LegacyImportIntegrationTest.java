@@ -65,6 +65,7 @@ class LegacyImportIntegrationTest {
         assertEquals(1715, count(jdbc, "select count(*) from contracts"));
         assertEquals(1715, count(jdbc, "select count(*) from cohort_enrollments"));
         assertEquals(6, count(jdbc, "select count(*) from cohorts"));
+        assertEquals(6, count(jdbc, "select count(*) from cohorts where end_date is null"));
         assertEquals(4, count(jdbc, """
                 select count(*) from cohorts
                 where default_weekday between 1 and 4 and shift_code = 'NAO_INFORMADO'
@@ -173,7 +174,8 @@ class LegacyImportIntegrationTest {
                 join contracts c on c.id = e.contract_id
                 join cohorts h on h.id = e.cohort_id
                 where e.start_date < c.start_date or e.end_date > c.end_date
-                  or e.start_date < h.start_date or e.end_date > h.end_date
+                  or e.start_date < h.start_date
+                  or (h.end_date is not null and e.end_date > h.end_date)
                 """));
         assertEquals(0, count(jdbc, """
                 select count(*) from cohort_enrollments
