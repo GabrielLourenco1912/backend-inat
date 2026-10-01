@@ -21,6 +21,7 @@ public final class LearnerDtos {
     public record Response(
             String id,
             String personId,
+            String fullName,
             Long registrationNumber,
             boolean hasCompletedHighSchool,
             RecordStatus status,

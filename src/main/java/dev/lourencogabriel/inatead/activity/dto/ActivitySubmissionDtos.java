@@ -32,6 +32,8 @@ public final class ActivitySubmissionDtos {
             String id,
             String activityId,
             String learnerId,
+            String learnerName,
+            Long learnerRegistrationNumber,
             String gradedByUserId,
             String textAnswer,
             SubmissionStatus status,

@@ -268,6 +268,8 @@ public class ActivitySubmissionService {
                 submission.getId(),
                 submission.getActivity().getId(),
                 submission.getLearner().getId(),
+                submission.getLearner().getPerson().getFullName(),
+                submission.getLearner().getRegistrationNumber(),
                 submission.getGradedByUser() == null
                         ? null
                         : submission.getGradedByUser().getUlid(),

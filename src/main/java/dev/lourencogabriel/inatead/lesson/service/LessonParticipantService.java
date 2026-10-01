@@ -301,6 +301,8 @@ public class LessonParticipantService {
                 participant.getId(),
                 participant.getLesson().getId(),
                 participant.getLearner().getId(),
+                participant.getLearner().getPerson().getFullName(),
+                participant.getLearner().getRegistrationNumber(),
                 participant.getSourceEnrollment() == null
                         ? null
                         : participant.getSourceEnrollment().getId(),

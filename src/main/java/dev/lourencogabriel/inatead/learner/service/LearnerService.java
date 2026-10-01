@@ -84,6 +84,7 @@ public class LearnerService extends AbstractCrudService<Learner, LearnerDtos.Req
         return new LearnerDtos.Response(
                 entity.getId(),
                 entity.getPerson().getId(),
+                entity.getPerson().getFullName(),
                 entity.getRegistrationNumber(),
                 entity.isHasCompletedHighSchool(),
                 entity.getStatus(),

@@ -48,6 +48,78 @@ class PortalSearchIntegrationTest {
     @Autowired EntityManager em;
     @Autowired UserRoleService grants;
     @Autowired RoleRepository roles;
+    @Autowired dev.lourencogabriel.inatead.learner.service.LearnerService learners;
+    @Autowired dev.lourencogabriel.inatead.contract.service.ContractService contracts;
+    @Autowired dev.lourencogabriel.inatead.lesson.service.LessonService lessons;
+    @Autowired dev.lourencogabriel.inatead.lesson.service.LessonParticipantService participants;
+    @Autowired dev.lourencogabriel.inatead.activity.service.ActivitySubmissionService submissions;
+
+    @Test void learnerAndContractResponsesIncludeLinkedNamesWithoutChangingIds() {
+        var learner = em.createQuery("select learner from Learner learner", Learner.class).setMaxResults(1).getSingleResult();
+        var learnerResponse = learners.findById(learner.getId());
+        assertEquals(learner.getId(), learnerResponse.id());
+        assertEquals(learner.getPerson().getFullName(), learnerResponse.fullName());
+
+        var contract = em.createQuery("select contract from Contract contract", Contract.class).setMaxResults(1).getSingleResult();
+        var response = contracts.findById(contract.getId());
+        assertEquals(contract.getLearner().getId(), response.learnerId());
+        assertEquals(contract.getLearner().getPerson().getFullName(), response.learnerName());
+        assertEquals(contract.getLearner().getRegistrationNumber(), response.learnerRegistrationNumber());
+        assertEquals(contract.getEmployer().getDisplayName(), response.employerName());
+        assertEquals(contract.getSchool() == null ? null : contract.getSchool().getDisplayName(), response.schoolName());
+    }
+
+    @Test void lessonRosterAndSubmissionsIncludeNamesAndRegistrationNumbers() {
+        var learner = em.createQuery("select learner from Learner learner", Learner.class).setMaxResults(1).getSingleResult();
+        String learnerName = learner.getPerson().getFullName();
+        var cohort = em.createQuery("select cohort from Cohort cohort", Cohort.class).setMaxResults(1).getSingleResult();
+        var instructor = person("Instrutor de referências", LocalDate.of(1990, 1, 1), PersonTypeCode.INSTRUCTOR);
+        var user = new User("Instrutor", ids.incrementAndGet() + "@search.test", "hash");
+        user.setPerson(instructor);
+        em.persist(user);
+        var lesson = new Lesson();
+        lesson.setCohort(cohort);
+        lesson.setInstructorPerson(instructor);
+        lesson.setTitle("Aula de referências");
+        lesson.setDescription("Objetivos e conteúdo da aula");
+        lesson.setStartsAt(Instant.parse("2026-09-10T13:00:00Z"));
+        lesson.setEndsAt(Instant.parse("2026-09-10T15:00:00Z"));
+        lesson.setDeliveryMode(DeliveryMode.ONLINE);
+        em.persist(lesson);
+        var participant = new LessonParticipant();
+        participant.setLesson(lesson);
+        participant.setLearner(learner);
+        participant.setParticipationType(ParticipationType.REGULAR);
+        participant.setStatus(ParticipationStatus.EXPECTED);
+        em.persist(participant);
+        var activity = new dev.lourencogabriel.inatead.activity.model.Activity();
+        activity.setLesson(lesson);
+        activity.setCreatedByUser(user);
+        activity.setTitle("Atividade de referências");
+        activity.setDescription("Enunciado");
+        activity.setAvailableAt(lesson.getStartsAt());
+        activity.setDueAt(lesson.getEndsAt());
+        activity.setStatus(ActivityStatus.PUBLISHED);
+        em.persist(activity);
+        var submission = new dev.lourencogabriel.inatead.activity.model.ActivitySubmission();
+        submission.setActivity(activity);
+        submission.setLearner(learner);
+        submission.setStatus(SubmissionStatus.SUBMITTED);
+        em.persist(submission);
+        em.flush();
+        em.clear();
+
+        var response = lessons.findById(lesson.getId());
+        assertEquals(cohort.getCode(), response.cohortCode());
+        assertEquals(cohort.getName(), response.cohortName());
+        assertEquals(instructor.getFullName(), response.instructorName());
+        var roster = participants.findByLesson(lesson.getId());
+        assertEquals(learnerName, roster.getFirst().learnerName());
+        assertEquals(learner.getRegistrationNumber(), roster.getFirst().learnerRegistrationNumber());
+        var deliveries = submissions.findByActivity(activity.getId());
+        assertEquals(learnerName, deliveries.getFirst().learnerName());
+        assertEquals(learner.getRegistrationNumber(), deliveries.getFirst().learnerRegistrationNumber());
+    }
 
     private Person person(String name, LocalDate birth, PersonTypeCode type) {
         var dto = people.create(new PersonDtos.Request(new AddressDtos.Request("83200000", "Rua teste", "10", null, "Centro", "Paranagua", "PR", "BR"),

@@ -355,6 +355,7 @@ class LearnerOnboardingServiceTest {
         return new LearnerDtos.Response(
                 id,
                 personId,
+                "Aprendiz de teste",
                 1L,
                 false,
                 RecordStatus.ACTIVE,

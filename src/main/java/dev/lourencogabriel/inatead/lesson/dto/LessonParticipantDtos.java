@@ -35,6 +35,8 @@ public final class LessonParticipantDtos {
             String id,
             String lessonId,
             String learnerId,
+            String learnerName,
+            Long learnerRegistrationNumber,
             String sourceEnrollmentId,
             String assignedByUserId,
             ParticipationType participationType,

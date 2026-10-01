@@ -9,6 +9,7 @@ import dev.lourencogabriel.inatead.shared.model.AttendanceStatus;
 import dev.lourencogabriel.inatead.shared.model.SubmissionStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -23,6 +24,10 @@ import java.util.Collection;
 
 public interface LessonParticipantRepository extends JpaRepository<LessonParticipant, String> {
 
+    @Override
+    @EntityGraph(attributePaths = {"learner.person", "lesson", "sourceEnrollment", "assignedByUser"})
+    Page<LessonParticipant> findAll(Pageable pageable);
+
     boolean existsByLesson_IdAndLearner_Id(String lessonId, String learnerId);
 
     boolean existsByLesson_Id(String lessonId);
@@ -34,7 +39,7 @@ public interface LessonParticipantRepository extends JpaRepository<LessonPartici
             Collection<LessonStatus> lessonStatuses
     );
 
-    @EntityGraph(attributePaths = {"learner", "sourceEnrollment"})
+    @EntityGraph(attributePaths = {"learner.person", "sourceEnrollment"})
     List<LessonParticipant> findAllByLesson_Id(String lessonId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

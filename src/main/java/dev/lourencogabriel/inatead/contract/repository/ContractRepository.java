@@ -4,6 +4,9 @@ import dev.lourencogabriel.inatead.contract.model.Contract;
 import dev.lourencogabriel.inatead.shared.model.ContractStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.EntityGraph;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -14,6 +17,10 @@ import java.util.List;
 import java.util.Optional;
 
 public interface ContractRepository extends JpaRepository<Contract, String> {
+
+    @Override
+    @EntityGraph(attributePaths = {"learner.person", "employer", "school"})
+    Page<Contract> findAll(Pageable pageable);
 
     @Query("""
             select (count(c) > 0)
@@ -38,6 +45,7 @@ public interface ContractRepository extends JpaRepository<Contract, String> {
 
     boolean existsByLearner_Id(String learnerId);
 
+    @EntityGraph(attributePaths = {"learner.person", "employer", "school"})
     List<Contract> findAllByLearner_IdOrderByStartDateDesc(String learnerId);
 
     boolean existsByLearner_IdAndStatusIn(
@@ -79,5 +87,6 @@ public interface ContractRepository extends JpaRepository<Contract, String> {
                or c.school.id = :organizationId
             order by c.startDate desc
             """)
+    @EntityGraph(attributePaths = {"learner.person", "employer", "school"})
     List<Contract> findAllByOrganization(@Param("organizationId") String organizationId);
 }

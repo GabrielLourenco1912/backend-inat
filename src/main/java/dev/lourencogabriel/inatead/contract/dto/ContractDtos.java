@@ -37,6 +37,10 @@ public final class ContractDtos {
             String learnerId,
             String employerId,
             String schoolId,
+            String learnerName,
+            Long learnerRegistrationNumber,
+            String employerName,
+            String schoolName,
             LocalDate startDate,
             LocalDate endDate,
             BigDecimal monthlySalary,
@@ -53,6 +57,8 @@ public final class ContractDtos {
             String id,
             String previousSchoolId,
             String newSchoolId,
+            String previousSchoolName,
+            String newSchoolName,
             String changedByUserId,
             Instant changedAt
     ) {

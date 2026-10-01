@@ -114,6 +114,9 @@ public class OrganizationService
                 entity.getParentOrganization() == null
                         ? null
                         : entity.getParentOrganization().getId(),
+                entity.getParentOrganization() == null
+                        ? null
+                        : entity.getParentOrganization().getDisplayName(),
                 addressService.toResponse(entity.getAddress()),
                 entity.getOrganizationTypes().stream()
                         .map(OrganizationTypeEntry::getCode)

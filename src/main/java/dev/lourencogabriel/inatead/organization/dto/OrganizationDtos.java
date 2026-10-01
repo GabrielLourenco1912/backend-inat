@@ -41,6 +41,7 @@ public final class OrganizationDtos {
     public record Response(
             String id,
             String parentOrganizationId,
+            String parentOrganizationName,
             AddressDtos.Response address,
             Set<OrganizationType> organizationTypes,
             String legalName,

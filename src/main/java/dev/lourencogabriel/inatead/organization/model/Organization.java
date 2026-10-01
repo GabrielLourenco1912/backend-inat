@@ -91,4 +91,8 @@ public class Organization extends AuditedEntity {
     public boolean hasType(OrganizationType type) {
         return organizationTypes.stream().anyMatch(entry -> entry.getCode() == type);
     }
+
+    public String getDisplayName() {
+        return tradeName == null || tradeName.isBlank() ? legalName : tradeName;
+    }
 }

@@ -316,26 +316,43 @@ public class ContractService extends AbstractCrudService<Contract, ContractDtos.
                 entity.getLearner().getId(),
                 entity.getEmployer().getId(),
                 entity.getSchool() == null ? null : entity.getSchool().getId(),
+                entity.getLearner().getPerson().getFullName(),
+                entity.getLearner().getRegistrationNumber(),
+                entity.getEmployer().getDisplayName(),
+                entity.getSchool() == null ? null : entity.getSchool().getDisplayName(),
                 entity.getStartDate(),
                 entity.getEndDate(),
                 entity.getMonthlySalary(),
                 entity.getWeeklyWorkloadMinutes(),
                 entity.getStatus(),
                 historyService.find(LifecycleAggregateType.CONTRACT, entity.getId()),
-                schoolChangeRepository
-                        .findAllByContract_IdOrderByChangedAtAscIdAsc(entity.getId())
-                        .stream()
-                        .map(change -> new ContractDtos.SchoolChangeResponse(
-                                change.getId(),
-                                change.getPreviousSchoolId(),
-                                change.getNewSchoolId(),
-                                change.getChangedByUserId(),
-                                change.getChangedAt()
-                        ))
-                        .toList(),
+                schoolHistory(entity.getId()),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
         );
+    }
+
+    private List<ContractDtos.SchoolChangeResponse> schoolHistory(String contractId) {
+        var changes = schoolChangeRepository.findAllByContract_IdOrderByChangedAtAscIdAsc(contractId);
+        if (changes.isEmpty()) {
+            return List.of();
+        }
+        var schoolIds = changes.stream()
+                .flatMap(change -> java.util.stream.Stream.of(change.getPreviousSchoolId(), change.getNewSchoolId()))
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        var names = organizationRepository.findAllById(schoolIds).stream()
+                .collect(java.util.stream.Collectors.toMap(Organization::getId, Organization::getDisplayName));
+        return changes.stream().map(change -> new ContractDtos.SchoolChangeResponse(
+                change.getId(),
+                change.getPreviousSchoolId(),
+                change.getNewSchoolId(),
+                names.get(change.getPreviousSchoolId()),
+                names.get(change.getNewSchoolId()),
+                change.getChangedByUserId(),
+                change.getChangedAt()
+        )).toList();
     }
 
     private void validateImmutableIdentity(Contract contract, ContractDtos.Request request) {

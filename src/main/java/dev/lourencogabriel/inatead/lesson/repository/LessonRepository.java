@@ -6,6 +6,8 @@ import dev.lourencogabriel.inatead.shared.model.DeliveryMode;
 import dev.lourencogabriel.inatead.shared.model.ParticipationStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
@@ -19,10 +21,16 @@ import java.util.Optional;
 
 public interface LessonRepository extends JpaRepository<Lesson, String> {
 
+    @Override
+    @EntityGraph(attributePaths = {"cohort", "instructorPerson"})
+    Page<Lesson> findAll(Pageable pageable);
+
     boolean existsByInstructorPerson_Id(String personId);
 
+    @EntityGraph(attributePaths = {"cohort", "instructorPerson"})
     List<Lesson> findAllByInstructorPerson_IdOrderByStartsAtDesc(String instructorPersonId);
 
+    @EntityGraph(attributePaths = {"cohort", "instructorPerson"})
     @Query("""
             select distinct l
             from Lesson l
