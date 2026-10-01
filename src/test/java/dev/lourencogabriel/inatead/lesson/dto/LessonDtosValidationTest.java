@@ -73,10 +73,25 @@ class LessonDtosValidationTest {
     }
 
     private LessonDtos.Request request(String meetingUrl, String externalLessonUrl) {
+        return request(meetingUrl, externalLessonUrl, "Descrição da aula");
+    }
+
+    @Test
+    void shouldRequireDescriptionAndLimitItsLength() {
+        for (String description : new String[]{null, "", "   ", "a".repeat(5001)}) {
+            var violations = validator.validate(request(null, null, description));
+            assertEquals(1, violations.size());
+            assertEquals("description", violations.iterator().next().getPropertyPath().toString());
+        }
+        assertTrue(validator.validate(request(null, null, "a".repeat(5000))).isEmpty());
+    }
+
+    private LessonDtos.Request request(String meetingUrl, String externalLessonUrl, String description) {
         return new LessonDtos.Request(
                 "cohort",
                 "instructor",
                 "External lesson URL validation",
+                description,
                 Instant.parse("2026-09-10T13:00:00Z"),
                 Instant.parse("2026-09-10T15:00:00Z"),
                 DeliveryMode.ONLINE,

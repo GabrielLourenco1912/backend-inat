@@ -13,6 +13,10 @@ import dev.lourencogabriel.inatead.document.model.StoredFile;
 import dev.lourencogabriel.inatead.document.repository.StoredFileRepository;
 import dev.lourencogabriel.inatead.document.storage.FileUploadPurpose;
 import dev.lourencogabriel.inatead.lesson.model.Lesson;
+import dev.lourencogabriel.inatead.lesson.dto.LessonFileDtos;
+import dev.lourencogabriel.inatead.lesson.model.LessonFileId;
+import dev.lourencogabriel.inatead.lesson.repository.LessonFileRepository;
+import dev.lourencogabriel.inatead.lesson.service.LessonFileService;
 import dev.lourencogabriel.inatead.lesson.repository.LessonRepository;
 import dev.lourencogabriel.inatead.person.model.Person;
 import dev.lourencogabriel.inatead.person.repository.PersonRepository;
@@ -22,6 +26,7 @@ import dev.lourencogabriel.inatead.shared.model.DeliveryMode;
 import dev.lourencogabriel.inatead.shared.model.LessonStatus;
 import dev.lourencogabriel.inatead.user.model.User;
 import dev.lourencogabriel.inatead.user.repository.UserRepository;
+import dev.lourencogabriel.inatead.web.exception.ResourceNotFoundException;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -58,6 +63,10 @@ class StoredFileLifecycleIntegrationTest {
     private StoredFileService service;
     @Autowired
     private ActivityFileService activityFileService;
+    @Autowired
+    private LessonFileService lessonFileService;
+    @Autowired
+    private LessonFileRepository lessonFileRepository;
     @Autowired
     private StoredFileRepository fileRepository;
     @Autowired
@@ -257,7 +266,7 @@ class StoredFileLifecycleIntegrationTest {
         });
     }
 
-    private String createActivity(String userId) {
+    private String createLesson(String userId) {
         return transactionTemplate.execute(status -> {
             String suffix = UUID.randomUUID().toString().replace("-", "");
             User user = userRepository.findById(userId).orElseThrow();
@@ -276,13 +285,21 @@ class StoredFileLifecycleIntegrationTest {
             lesson.setCohort(cohort);
             lesson.setInstructorPerson(user.getPerson());
             lesson.setTitle("Storage Test Lesson");
+            lesson.setDescription("Descrição da aula de teste");
             lesson.setStartsAt(Instant.parse("2026-09-04T12:00:00Z"));
             lesson.setEndsAt(Instant.parse("2026-09-04T13:00:00Z"));
             lesson.setDeliveryMode(DeliveryMode.ONLINE);
             lesson.setMeetingUrl("https://example.com/lesson");
             lesson.setStatus(LessonStatus.SCHEDULED);
-            lessonRepository.save(lesson);
+            return lessonRepository.save(lesson).getId();
+        });
+    }
 
+    private String createActivity(String userId) {
+        String lessonId = createLesson(userId);
+        return transactionTemplate.execute(status -> {
+            User user = userRepository.findById(userId).orElseThrow();
+            Lesson lesson = lessonRepository.findById(lessonId).orElseThrow();
             Activity activity = new Activity();
             activity.setLesson(lesson);
             activity.setCreatedByUser(user);
@@ -293,6 +310,54 @@ class StoredFileLifecycleIntegrationTest {
             activity.setStatus(ActivityStatus.PUBLISHED);
             return activityRepository.save(activity).getId();
         });
+    }
+
+    @Test
+    void shouldOrderLessonMaterialsAndScopeTheirDownloadsAndDeletion() throws Exception {
+        String userId = createUser();
+        String lessonId = createLesson(userId);
+        String otherLessonId = createLesson(userId);
+        byte[] content = "lesson material".getBytes(StandardCharsets.UTF_8);
+        MockMultipartFile upload = new MockMultipartFile("file", "material.txt", MediaType.TEXT_PLAIN_VALUE, content);
+
+        var second = lessonFileService.attach(lessonId, new LessonFileDtos.Request(2), upload, userId);
+        var first = lessonFileService.attach(lessonId, new LessonFileDtos.Request(0), upload, userId);
+        String fileId = second.file().id();
+        Path storedPath = STORAGE_ROOT.resolve(fileRepository.findById(fileId).orElseThrow().getStorageKey());
+
+        assertTrue(lessonFileRepository.existsById(new LessonFileId(lessonId, fileId)));
+        assertEquals(java.util.List.of(first.file().id(), fileId), lessonFileService.findByLesson(lessonId)
+                .stream().map(link -> link.file().id()).toList());
+        assertTrue(lessonFileService.findByLesson(otherLessonId).isEmpty());
+        assertThrows(ResourceNotFoundException.class, () -> lessonFileService.download(otherLessonId, fileId));
+        assertThrows(ResourceNotFoundException.class, () -> lessonFileService.detach(otherLessonId, fileId));
+        try (var stream = lessonFileService.download(lessonId, fileId).resource().getInputStream()) {
+            assertArrayEquals(content, stream.readAllBytes());
+        }
+
+        lessonFileService.detach(lessonId, fileId);
+        assertFalse(fileRepository.existsById(fileId));
+        assertFalse(lessonFileRepository.existsById(new LessonFileId(lessonId, fileId)));
+        assertTrue(Files.exists(storedPath));
+        lessonFileService.detach(lessonId, first.file().id());
+        assertFalse(Files.exists(storedPath));
+    }
+
+    @Test
+    void shouldRollBackLessonMaterialAndBinaryTogether() throws Exception {
+        String userId = createUser();
+        String lessonId = createLesson(userId);
+        long fileCountBefore = fileRepository.count();
+        long binaryCountBefore = binaryCount();
+        transactionTemplate.executeWithoutResult(status -> {
+            lessonFileService.attach(lessonId, new LessonFileDtos.Request(0),
+                    new MockMultipartFile("file", "rollback.txt", MediaType.TEXT_PLAIN_VALUE,
+                            "lesson upload rollback".getBytes(StandardCharsets.UTF_8)), userId);
+            status.setRollbackOnly();
+        });
+        assertTrue(lessonFileService.findByLesson(lessonId).isEmpty());
+        assertEquals(fileCountBefore, fileRepository.count());
+        assertEquals(binaryCountBefore, binaryCount());
     }
 
     private long binaryCount() throws IOException {

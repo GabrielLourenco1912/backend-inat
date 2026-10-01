@@ -8,6 +8,7 @@ import dev.lourencogabriel.inatead.lesson.dto.LessonDtos;
 import dev.lourencogabriel.inatead.lesson.model.Lesson;
 import dev.lourencogabriel.inatead.lesson.repository.LessonParticipantRepository;
 import dev.lourencogabriel.inatead.lesson.repository.LessonRepository;
+import dev.lourencogabriel.inatead.lesson.repository.LessonFileRepository;
 import dev.lourencogabriel.inatead.notification.repository.NotificationRepository;
 import dev.lourencogabriel.inatead.person.repository.PersonRepository;
 import dev.lourencogabriel.inatead.person.model.PersonTypeCode;
@@ -54,6 +55,7 @@ public class LessonService extends AbstractCrudService<Lesson, LessonDtos.Reques
     private final Clock clock;
     private final ApprenticeshipPolicy apprenticeshipPolicy;
     private final LessonParticipantService participantService;
+    private final LessonFileRepository fileRepository;
 
     public LessonService(
             LessonRepository lessonRepository,
@@ -65,7 +67,8 @@ public class LessonService extends AbstractCrudService<Lesson, LessonDtos.Reques
             NotificationRepository notificationRepository,
             Clock clock,
             ApprenticeshipPolicy apprenticeshipPolicy,
-            LessonParticipantService participantService
+            LessonParticipantService participantService,
+            LessonFileRepository fileRepository
     ) {
         super(lessonRepository, "Lesson");
         this.lessonRepository = lessonRepository;
@@ -78,6 +81,7 @@ public class LessonService extends AbstractCrudService<Lesson, LessonDtos.Reques
         this.clock = clock;
         this.apprenticeshipPolicy = apprenticeshipPolicy;
         this.participantService = participantService;
+        this.fileRepository = fileRepository;
     }
 
     @Override
@@ -101,6 +105,7 @@ public class LessonService extends AbstractCrudService<Lesson, LessonDtos.Reques
         entity.setInstructorPerson(personRepository.findByIdForUpdate(request.instructorPersonId())
                 .orElseThrow(() -> new ResourceNotFoundException("Instructor", request.instructorPersonId())));
         entity.setTitle(request.title().trim());
+        entity.setDescription(request.description().trim());
         entity.setStartsAt(request.startsAt());
         entity.setEndsAt(request.endsAt());
         entity.setDeliveryMode(request.deliveryMode());
@@ -249,6 +254,9 @@ public class LessonService extends AbstractCrudService<Lesson, LessonDtos.Reques
         if (activityRepository.existsByLesson_Id(lesson.getId())) {
             throw new BusinessRuleException("A lesson with activities cannot be deleted");
         }
+        if (fileRepository.existsByLesson_Id(lesson.getId())) {
+            throw new BusinessRuleException("Remove lesson materials before deleting the lesson");
+        }
     }
 
     private void validateDeliveryLocation(Lesson entity) {
@@ -339,6 +347,7 @@ public class LessonService extends AbstractCrudService<Lesson, LessonDtos.Reques
                 entity.getCohort().getId(),
                 entity.getInstructorPerson().getId(),
                 entity.getTitle(),
+                entity.getDescription(),
                 entity.getStartsAt(),
                 entity.getEndsAt(),
                 entity.getDeliveryMode(),

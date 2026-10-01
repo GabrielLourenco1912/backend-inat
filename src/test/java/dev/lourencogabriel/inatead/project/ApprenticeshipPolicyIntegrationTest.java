@@ -294,6 +294,7 @@ class ApprenticeshipPolicyIntegrationTest {
         lesson.setCohort(cohort);
         lesson.setInstructorPerson(instructor);
         lesson.setTitle("Apprenticeship lesson");
+        lesson.setDescription("Descrição da aula de teste");
         lesson.setStartsAt(Instant.parse("2026-09-10T13:00:00Z"));
         lesson.setEndsAt(Instant.parse("2026-09-10T15:00:00Z"));
         lesson.setDeliveryMode(mode);

@@ -49,6 +49,9 @@ public class Lesson extends AuditedEntity {
     @Column(length = 160, nullable = false)
     private String title;
 
+    @Column(columnDefinition = "text", nullable = false)
+    private String description;
+
     @Column(name = "starts_at", nullable = false)
     private Instant startsAt;
 

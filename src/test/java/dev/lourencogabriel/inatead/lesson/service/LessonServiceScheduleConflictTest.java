@@ -12,6 +12,7 @@ import dev.lourencogabriel.inatead.lesson.model.Lesson;
 import dev.lourencogabriel.inatead.lesson.model.LessonParticipant;
 import dev.lourencogabriel.inatead.lesson.repository.LessonParticipantRepository;
 import dev.lourencogabriel.inatead.lesson.repository.LessonRepository;
+import dev.lourencogabriel.inatead.lesson.repository.LessonFileRepository;
 import dev.lourencogabriel.inatead.notification.repository.NotificationRepository;
 import dev.lourencogabriel.inatead.person.model.Person;
 import dev.lourencogabriel.inatead.person.model.PersonType;
@@ -74,6 +75,8 @@ class LessonServiceScheduleConflictTest {
     private ApprenticeshipPolicy apprenticeshipPolicy;
     @Mock
     private LessonParticipantService participantService;
+    @Mock
+    private LessonFileRepository fileRepository;
 
     private LessonService service;
     private Cohort cohort;
@@ -91,7 +94,8 @@ class LessonServiceScheduleConflictTest {
                 notificationRepository,
                 Clock.fixed(STARTS_AT, ZoneId.of("America/Sao_Paulo")),
                 apprenticeshipPolicy,
-                participantService
+                participantService,
+                fileRepository
         );
 
         cohort = new Cohort();
@@ -132,6 +136,8 @@ class LessonServiceScheduleConflictTest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         LessonDtos.Response response = service.create(request());
+
+        assertEquals("Objetivos da aula\nConteúdo e orientações.", response.description());
 
         assertEquals(
                 "https://www.youtube.com/watch?v=lesson-test",
@@ -200,6 +206,7 @@ class LessonServiceScheduleConflictTest {
                 "cohort",
                 "instructor",
                 "Online lesson without meeting",
+                "Descrição da aula online",
                 STARTS_AT,
                 ENDS_AT,
                 DeliveryMode.ONLINE,
@@ -609,6 +616,19 @@ class LessonServiceScheduleConflictTest {
         )).thenReturn(true);
     }
 
+    @Test
+    void shouldRequireRemovingMaterialsBeforeDeletingLesson() {
+        Lesson lesson = lesson();
+        lesson.setId("lesson");
+        when(lessonRepository.findById("lesson")).thenReturn(Optional.of(lesson));
+        when(fileRepository.existsByLesson_Id("lesson")).thenReturn(true);
+
+        var exception = assertThrows(BusinessRuleException.class, () -> service.delete("lesson"));
+
+        assertEquals("Remove lesson materials before deleting the lesson", exception.getMessage());
+        verify(lessonRepository, never()).delete(any());
+    }
+
     private LessonDtos.Request request() {
         return request(LessonStatus.SCHEDULED);
     }
@@ -627,6 +647,7 @@ class LessonServiceScheduleConflictTest {
                 cohortId,
                 "instructor",
                 "Schedule conflict test",
+                "  Objetivos da aula\nConteúdo e orientações.  ",
                 startsAt,
                 endsAt,
                 DeliveryMode.ONSITE,
@@ -642,6 +663,7 @@ class LessonServiceScheduleConflictTest {
                 "cohort",
                 "instructor",
                 "Cancelled lesson",
+                "Descrição da aula cancelada",
                 STARTS_AT,
                 ENDS_AT,
                 DeliveryMode.ONSITE,
@@ -653,7 +675,7 @@ class LessonServiceScheduleConflictTest {
     }
 
     private LessonDtos.Request onlineRequest() {
-        return new LessonDtos.Request("cohort", "instructor", "Online lesson", STARTS_AT, ENDS_AT,
+        return new LessonDtos.Request("cohort", "instructor", "Online lesson", "Descrição da aula online", STARTS_AT, ENDS_AT,
                 DeliveryMode.ONLINE, null, null, null, LessonStatus.SCHEDULED);
     }
 

@@ -199,6 +199,7 @@ class LessonScheduleConflictIntegrationTest {
         lesson.setCohort(cohort);
         lesson.setInstructorPerson(instructor);
         lesson.setTitle(title);
+        lesson.setDescription("Descrição da aula de teste");
         lesson.setStartsAt(startsAt);
         lesson.setEndsAt(endsAt);
         lesson.setDeliveryMode(DeliveryMode.ONSITE);

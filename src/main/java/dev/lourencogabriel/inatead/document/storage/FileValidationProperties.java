@@ -33,7 +33,7 @@ public class FileValidationProperties {
     public Set<String> allowedExtensions(FileUploadPurpose purpose) {
         return switch (purpose) {
             case PERSON_DOCUMENT, CONTRACT_DOCUMENT -> documentExtensions;
-            case ACTIVITY_MATERIAL -> activityExtensions;
+            case LESSON_MATERIAL, ACTIVITY_MATERIAL -> activityExtensions;
             case SUBMISSION_ATTACHMENT -> submissionExtensions;
         };
     }

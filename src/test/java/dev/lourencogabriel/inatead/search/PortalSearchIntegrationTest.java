@@ -178,6 +178,7 @@ class PortalSearchIntegrationTest {
         cohort.setShiftCode("MORNING"); cohort.setStartDate(LocalDate.of(2026,1,1));
         em.persist(cohort);
         var lesson = new Lesson(); lesson.setCohort(cohort); lesson.setInstructorPerson(teacher);
+        lesson.setDescription("Descrição da aula de teste");
         lesson.setTitle("Aula pesquisável"); lesson.setStartsAt(Instant.parse("2026-09-11T01:00:00Z"));
         lesson.setEndsAt(Instant.parse("2026-09-11T02:00:00Z")); lesson.setDeliveryMode(DeliveryMode.ONLINE);
         em.persist(lesson);

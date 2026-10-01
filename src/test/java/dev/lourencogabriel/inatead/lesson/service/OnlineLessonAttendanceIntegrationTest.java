@@ -161,6 +161,7 @@ class OnlineLessonAttendanceIntegrationTest {
         lesson.setCohort(cohort);
         lesson.setInstructorPerson(person);
         lesson.setTitle("Online attendance lesson");
+        lesson.setDescription("Descrição da aula de teste");
         lesson.setStartsAt(Instant.parse("2026-09-06T13:00:00Z"));
         lesson.setEndsAt(Instant.parse("2026-09-06T15:00:00Z"));
         lesson.setDeliveryMode(DeliveryMode.ONLINE);
@@ -261,6 +262,7 @@ class OnlineLessonAttendanceIntegrationTest {
         lesson.setCohort(cohort);
         lesson.setInstructorPerson(instructor);
         lesson.setTitle(title);
+        lesson.setDescription("Descrição da aula de teste");
         lesson.setStartsAt(Instant.parse(endsAt).minusSeconds(7_200));
         lesson.setEndsAt(Instant.parse(endsAt));
         lesson.setDeliveryMode(DeliveryMode.ONLINE);

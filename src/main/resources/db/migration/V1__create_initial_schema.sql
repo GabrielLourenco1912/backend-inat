@@ -219,6 +219,14 @@
         primary key (id)
     ) engine=InnoDB;
 
+    create table lesson_files (
+        sort_order integer not null,
+        created_at datetime(6) not null,
+        lesson_id varchar(26) not null,
+        file_id varchar(26) not null,
+        primary key (lesson_id, file_id)
+    ) engine=InnoDB;
+
     create table lessons (
         created_at datetime(6) not null,
         ends_at datetime(6) not null,
@@ -231,6 +239,7 @@
         title varchar(160) not null,
         meeting_url varchar(512),
         external_lesson_url varchar(2048),
+        description text not null,
         delivery_mode enum ('ONLINE','ONSITE') not null,
         status enum ('CANCELLED','COMPLETED','IN_PROGRESS','SCHEDULED') not null,
         primary key (id)
@@ -767,6 +776,16 @@
        add constraint FKlls1i4xul6ittf8twuf8kbek9
        foreign key (source_enrollment_id)
        references cohort_enrollments (id);
+
+    alter table lesson_files
+       add constraint fk_lesson_files_lesson
+       foreign key (lesson_id)
+       references lessons (id);
+
+    alter table lesson_files
+       add constraint fk_lesson_files_file
+       foreign key (file_id)
+       references files (id);
 
     alter table lessons
        add constraint FKb8wumvxyidy53ubepxtsa65w3

@@ -332,6 +332,7 @@ class ActivityDueReminderIntegrationTest {
         lesson.setCohort(cohort);
         lesson.setInstructorPerson(instructor);
         lesson.setTitle("Reminder lesson");
+        lesson.setDescription("Descrição da aula de teste");
         lesson.setStartsAt(NOW.minusSeconds(3_600));
         lesson.setEndsAt(NOW.plusSeconds(14_400));
         lesson.setDeliveryMode(DeliveryMode.ONLINE);

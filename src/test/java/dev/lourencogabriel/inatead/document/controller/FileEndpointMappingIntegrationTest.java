@@ -34,6 +34,7 @@ class FileEndpointMappingIntegrationTest {
         ));
         assertTrue(patterns.contains("/api/person-documents/{id}/content"));
         assertTrue(patterns.contains("/api/contract-documents/{id}/content"));
+        assertTrue(patterns.contains("/api/lessons/{lessonId}/files/{fileId}/content"));
         assertTrue(patterns.contains("/api/activities/{activityId}/files/{fileId}/content"));
         assertTrue(patterns.contains(
                 "/api/activity-submissions/{submissionId}/files/{fileId}/content"
@@ -44,6 +45,7 @@ class FileEndpointMappingIntegrationTest {
     void shouldRequireMultipartForEveryUploadEndpoint() {
         assertMultipartPost("/api/person-documents");
         assertMultipartPost("/api/contract-documents");
+        assertMultipartPost("/api/lessons/{lessonId}/files");
         assertMultipartPost("/api/activities/{activityId}/files");
         assertMultipartPost("/api/activity-submissions/{submissionId}/files");
     }
