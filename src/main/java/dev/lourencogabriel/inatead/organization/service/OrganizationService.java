@@ -49,11 +49,12 @@ public class OrganizationService
         if (request.organizationTypes() == null || request.organizationTypes().isEmpty()) {
             throw new BusinessRuleException("An organization must have at least one type");
         }
+        String taxId = request.taxId().toUpperCase(Locale.ROOT);
         if (entity.getId() != null) {
             learnerRelationshipPolicy.validateOrganizationTaxId(
                     entity.getId(),
                     entity.getTaxId(),
-                    request.taxId()
+                    taxId
             );
             learnerRelationshipPolicy.validateOrganizationType(
                     entity.getId(),
@@ -82,7 +83,7 @@ public class OrganizationService
         entity.getOrganizationTypes().addAll(types);
         entity.setLegalName(request.legalName().trim());
         entity.setTradeName(normalizeNullable(request.tradeName()));
-        entity.setTaxId(request.taxId());
+        entity.setTaxId(taxId);
         entity.setContactEmail(request.contactEmail().trim().toLowerCase(Locale.ROOT));
         entity.setPhoneNumber(request.phoneNumber().trim());
         entity.setAttendanceClosingDay(request.attendanceClosingDay());

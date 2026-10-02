@@ -17,8 +17,8 @@ values ('EMPLOYER'),
 
 insert into addresses (country_code, state_code, created_at, postal_code, updated_at, street_number, id, address_line_2, city, district, street)
 values
-       ('BR', 'PR', NOW(6), '83252000', NOW(6), '1257', '1', 'Casa do gabe', 'PARANAGUÁ', 'Vila Bela - Ilha dos Valadares', 'Rua João Teixeira'),
-       ('BR', 'PR', NOW(6), '00000000', NOW(6), '0000', '01K0000000MNZ8WXSCRRPWYDBZ', NULL, 'PARANAGUÁ', 'Vila Bela - Ilha dos Valadares', 'Rua João Teixeira');
+       ('BR', 'PR', NOW(6), '83252000', NOW(6), '1257', '1', 'CASA DO GABE', 'PARANAGUÁ', 'VILA BELA - ILHA DOS VALADARES', 'RUA JOÃO TEIXEIRA'),
+       ('BR', 'PR', NOW(6), '00000000', NOW(6), '0000', '01K0000000MNZ8WXSCRRPWYDBZ', NULL, 'PARANAGUÁ', 'VILA BELA - ILHA DOS VALADARES', 'RUA JOÃO TEIXEIRA');
 
 insert into people (birth_date, created_at, updated_at, tax_id, phone_number, address_id, id, gender, full_name, contact_email, status)
 values

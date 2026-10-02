@@ -27,7 +27,10 @@ public final class OrganizationDtos {
             @NotEmpty Set<@NotNull OrganizationType> organizationTypes,
             @NotBlank @Size(max = 180) String legalName,
             @Size(max = 180) String tradeName,
-            @NotBlank @Pattern(regexp = "\\d{14}") String taxId,
+            @NotBlank @Pattern(
+                    regexp = "[A-Za-z0-9]{12}[0-9]{2}",
+                    message = "Informe CNPJ sem formatação: 12 letras ou números e 2 dígitos finais")
+            String taxId,
             @NotBlank @Email @Size(max = 254) String contactEmail,
             @NotBlank @Pattern(
                     regexp = "[1-9]{2}(?:9\\d{8}|[2-5]\\d{7})",

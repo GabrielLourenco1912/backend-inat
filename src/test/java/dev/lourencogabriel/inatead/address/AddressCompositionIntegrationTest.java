@@ -9,6 +9,7 @@ import dev.lourencogabriel.inatead.person.service.PersonService;
 import dev.lourencogabriel.inatead.shared.model.OrganizationType;
 import dev.lourencogabriel.inatead.shared.model.RecordStatus;
 import dev.lourencogabriel.inatead.web.exception.BusinessRuleException;
+import dev.lourencogabriel.inatead.web.exception.ResourceConflictException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -119,6 +120,30 @@ class AddressCompositionIntegrationTest {
 
         assertFalse(addressRepository.existsById(addressId));
         assertEquals(initialAddressCount, addressRepository.count());
+    }
+
+    @Test
+    void shouldPersistUppercaseAlphanumericCnpjAndRejectCaseInsensitiveDuplicates() {
+        var request = new OrganizationDtos.Request(
+                null, address("Alphanumeric Street"), Set.of(OrganizationType.EMPLOYER),
+                "Alphanumeric Company", null, "12abc34501de35", "alpha@example.com", "41999999999",
+                null, RecordStatus.ACTIVE
+        );
+        var created = organizationService.create(request);
+        try {
+            assertEquals("12ABC34501DE35", created.taxId());
+            assertEquals("12ABC34501DE35", organizationService.findById(created.id()).taxId());
+            var updated = organizationService.update(created.id(), request);
+            assertEquals(created.address().id(), updated.address().id());
+            assertEquals("12ABC34501DE35", updated.taxId());
+            assertThrows(ResourceConflictException.class, () -> organizationService.create(new OrganizationDtos.Request(
+                    null, address("Duplicate Street"), Set.of(OrganizationType.SCHOOL),
+                    "Duplicate Company", null, "12AbC34501dE35", "duplicate@example.com", "41999999999",
+                    null, RecordStatus.ACTIVE
+            )));
+        } finally {
+            organizationService.delete(created.id());
+        }
     }
 
     @Test
