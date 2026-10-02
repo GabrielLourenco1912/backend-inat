@@ -33,10 +33,31 @@ class LegacyImportIntegrationTest {
         assertEquals(1651, count(jdbc, "select max(registration_number) from learners"));
         assertEquals(1, count(jdbc, "select count(*) from users"));
         assertEquals(1, count(jdbc, "select count(*) from people where tax_id = '09286696965'"));
+        assertEquals(1, count(jdbc, "select count(*) from people where full_name = 'Gabriel Gomes Lourenço'"));
         assertEquals(1, count(jdbc, "select count(*) from learners where person_id = '1'"));
         assertEquals(0, count(jdbc, """
                 select count(*) from legacy_import_audit
                 where source_file = 'aprendizes_atual.xlsx' and source_row = 64
+                  and entity_table in ('people', 'learners')
+                """));
+        assertEquals(2, count(jdbc, """
+                select count(*) from legacy_import_audit
+                where source_file = 'aprendizes_atual.xlsx' and source_row = 64
+                  and entity_table in ('contracts', 'cohort_enrollments')
+                """));
+        assertEquals(1, count(jdbc, """
+                select count(*) from contracts c
+                join learners l on l.id = c.learner_id
+                join organizations o on o.id = c.employer_id
+                join cohort_enrollments e on e.contract_id = c.id
+                join cohorts h on h.id = e.cohort_id
+                where l.id = '1' and l.person_id = '1' and l.registration_number = 1
+                  and l.has_completed_high_school = true
+                  and o.tax_id = '75633560000182'
+                  and c.start_date = date '2026-01-08' and c.end_date = date '2027-03-24'
+                  and c.weekly_workload_minutes = 1800 and c.status = 'ACTIVE'
+                  and e.start_date = c.start_date and e.end_date = c.end_date
+                  and e.status = 'ACTIVE' and h.code = 'SEXTA_FEIRA_TARDE'
                 """));
         assertEquals(55, count(jdbc, "select count(*) from learner_guardians"));
         assertEquals(1, count(jdbc, """
@@ -62,8 +83,8 @@ class LegacyImportIntegrationTest {
                 join people p on p.id = g.guardian_person_id
                 where p.phone_number = '41900000000'
                 """));
-        assertEquals(1715, count(jdbc, "select count(*) from contracts"));
-        assertEquals(1715, count(jdbc, "select count(*) from cohort_enrollments"));
+        assertEquals(1716, count(jdbc, "select count(*) from contracts"));
+        assertEquals(1716, count(jdbc, "select count(*) from cohort_enrollments"));
         assertEquals(6, count(jdbc, "select count(*) from cohorts"));
         assertEquals(6, count(jdbc, "select count(*) from cohorts where end_date is null"));
         assertEquals(4, count(jdbc, """
@@ -83,7 +104,7 @@ class LegacyImportIntegrationTest {
         assertEquals(281, enrollmentCountForCohort(jdbc, "QUARTA_FEIRA"));
         assertEquals(276, enrollmentCountForCohort(jdbc, "QUINTA_FEIRA"));
         assertEquals(275, enrollmentCountForCohort(jdbc, "SEXTA_FEIRA_MANHA"));
-        assertEquals(266, enrollmentCountForCohort(jdbc, "SEXTA_FEIRA_TARDE"));
+        assertEquals(267, enrollmentCountForCohort(jdbc, "SEXTA_FEIRA_TARDE"));
         assertEquals("SEXTA_FEIRA_MANHA", cohortCodeForSourceRow(jdbc, "aprendizes_atual.xlsx", 2));
         assertEquals("QUARTA_FEIRA", cohortCodeForSourceRow(jdbc, "aprendizes_historico.xlsx", 274));
         assertEquals("SEGUNDA_FEIRA", cohortCodeForSourceRow(jdbc, "aprendizes_historico.xlsx", 850));
@@ -97,16 +118,16 @@ class LegacyImportIntegrationTest {
                   and source_file = 'aprendizes_atual.xlsx' and source_row = 169
                   and notes like '%[MOCK]%'
                 """));
-        assertEquals(165, count(jdbc, """
+        assertEquals(166, count(jdbc, """
                 select count(*) from cohort_enrollments e
                 join contracts c on c.id = e.contract_id
                 join cohorts h on h.id = e.cohort_id
                 where c.status = 'ACTIVE' and e.status = 'ACTIVE' and h.status = 'ACTIVE'
                 """));
-        assertEquals(1715, count(jdbc, """
+        assertEquals(1716, count(jdbc, """
                 select count(*) from legacy_import_audit where entity_table = 'contracts'
                 """));
-        assertEquals(169, count(jdbc, """
+        assertEquals(170, count(jdbc, """
                 select count(*) from contracts c
                 join legacy_import_audit a
                   on a.entity_table = 'contracts' and a.entity_id = c.id

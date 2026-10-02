@@ -17,17 +17,20 @@ values ('EMPLOYER'),
 
 insert into addresses (country_code, state_code, created_at, postal_code, updated_at, street_number, id, address_line_2, city, district, street)
 values
-       ('BR', 'PR', NOW(6), '83252000', NOW(6), '1257', '1', 'Casa do gabe', 'Paranaguá', 'Vila Bela - Ilha dos Valadares', 'Rua João Teixeira');
+       ('BR', 'PR', NOW(6), '83252000', NOW(6), '1257', '1', 'Casa do gabe', 'PARANAGUÁ', 'Vila Bela - Ilha dos Valadares', 'Rua João Teixeira'),
+       ('BR', 'PR', NOW(6), '00000000', NOW(6), '0000', '01K0000000MNZ8WXSCRRPWYDBZ', NULL, 'PARANAGUÁ', 'Vila Bela - Ilha dos Valadares', 'Rua João Teixeira');
 
 insert into people (birth_date, created_at, updated_at, tax_id, phone_number, address_id, id, gender, full_name, contact_email, status)
 values
-       ('2005-01-25', NOW(6), NOW(6), '09286696965', '41984359163', '1', '1', 'M', 'Gabriel Gomes Lourenço', 'gabri02gomes@hotmail.com', 'ACTIVE');
+       ('2005-01-25', NOW(6), NOW(6), '09286696965', '41984359163', '1', '1', 'Homem', 'Gabriel Gomes Lourenço', 'gabri02gomes@hotmail.com', 'ACTIVE'),
+       ('1990-03-12', NOW(6), NOW(6), '00000000000', '00000000000', '01K0000000MNZ8WXSCRRPWYDBZ', '01K0000000CKCFKK7S3JGYA3QK', 'Homem', 'Marciney', 'marciney@inat.org.br', 'ACTIVE');
 
 
 insert into person_type_assignments (person_id, person_type_code)
 values
        ('1', 'ADMIN'),
-       ('1', 'LEARNER');
+       ('1', 'LEARNER'),
+       ('01K0000000CKCFKK7S3JGYA3QK', 'ADMIN');
 
 insert into users (
        failed_authentication_attempts,
