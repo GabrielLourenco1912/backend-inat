@@ -9,7 +9,6 @@ import dev.lourencogabriel.inatead.person.repository.PersonRepository;
 import dev.lourencogabriel.inatead.shared.model.UserAccountStatus;
 import dev.lourencogabriel.inatead.user.model.User;
 import dev.lourencogabriel.inatead.user.repository.UserRepository;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -64,13 +63,6 @@ class TokenServiceConcurrencyIntegrationTest {
 
     @Autowired
     private PlatformTransactionManager transactionManager;
-
-    @BeforeEach
-    void setUp() {
-        this.refreshTokenRepository.deleteAll();
-        this.userRepository.deleteAll();
-        this.personRepository.deleteAll();
-    }
 
     @Test
     void shouldAllowOnlyOneRotationWhenSameRefreshTokenIsUsedConcurrently() throws Exception {
