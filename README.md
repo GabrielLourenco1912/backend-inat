@@ -50,6 +50,16 @@ O catálogo é fechado: a API rejeita a criação ou concessão de qualquer outr
 
 Em um banco novo, o primeiro papel `ADMIN` deve ser atribuído por um procedimento de bootstrap operacional no banco. A API não promove automaticamente o primeiro usuário e não oferece uma rota pública de elevação de privilégio.
 
+## Leituras paginadas do portal
+
+O portal utiliza `/api/search/{resource}?view=summary&q=...&page=0&size=20`, inclusive sem texto, para aplicar escopo, filtros e paginação no banco. A representação de resumo omite históricos e resolve as informações da página sem consultas individuais por linha. Endpoints antigos mantêm seus contratos.
+
+`/api/dashboard` retorna contadores e listas limitadas. `/api/notification-recipients/me/unread-count` usa `COUNT` e devolve somente `{count}`. Históricos, arquivos e coleções contextuais usam o mesmo contrato de leitura paginada. A migração V5 acrescenta índices para esses acessos.
+
+A chamada recebe alterações em `/api/lessons/{lessonId}/attendance/batch` e preenchimento por filtro em `/api/lessons/{lessonId}/attendance/fill-missing`, ambos com lotes de até 100 participantes. A prévia conta no banco; a gravação acontece somente ao salvar.
+
+O [contrato das consultas do portal](notes/portal-pagination.md) detalha os filtros, contagens, rascunhos da chamada e limites de rede.
+
 ## Organização da API
 
 Os endpoints ficam sob `/api` e seguem os módulos `people`, `users`, `roles`, `learners`, `organizations`, `contracts`, `document-types`, `person-documents`, `cohorts`, `cohort-enrollments`, `lessons`, `lesson-participants`, `attendance-records`, `activities`, `activity-submissions`, `notifications` e `notification-recipients`.
