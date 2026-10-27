@@ -30,6 +30,9 @@ class PortalReadIntegrationTest {
     @Autowired RoleRepository roles;
     @Autowired UserRoleService grants;
     @Autowired EntityManager em;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactions;
+    @Autowired dev.lourencogabriel.inatead.lesson.service.PortalAttendanceService attendance;
+    @Autowired dev.lourencogabriel.inatead.lesson.service.AttendanceRecordService attendanceRecords;
     @Autowired org.springframework.web.context.WebApplicationContext web;
     static long sequence=87000000000L;
     private Person person(String name,PersonTypeCode type) {
@@ -90,6 +93,53 @@ class PortalReadIntegrationTest {
                     .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
                     .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.data.size").value(5));
         } finally { org.springframework.security.core.context.SecurityContextHolder.clearContext(); }
+    }
+
+    @Test
+    @Transactional(propagation=org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+    void bulkAttendanceCrossesPagesAndIsIdempotentWithoutOverwritingExplicitEdits() {
+        var transaction=new org.springframework.transaction.support.TransactionTemplate(transactions);
+        record Scenario(Authentication auth,String lessonId,List<String> participants) {}
+        var scenario=transaction.execute(status->{
+            var auth=actor("ADMIN");
+            var instructor=person("Bulk instructor",PersonTypeCode.INSTRUCTOR);
+            var cohort=new dev.lourencogabriel.inatead.cohort.model.Cohort();
+            cohort.setCode("BULK"+(++sequence));cohort.setName("Bulk test");cohort.setDefaultWeekday(1);cohort.setShiftCode("MORNING");cohort.setStartDate(LocalDate.of(2026,1,1));em.persist(cohort);
+            var lesson=new dev.lourencogabriel.inatead.lesson.model.Lesson();lesson.setCohort(cohort);lesson.setInstructorPerson(instructor);lesson.setTitle("Bulk attendance");lesson.setDescription("Pagination");lesson.setStartsAt(java.time.Instant.parse("2026-09-10T13:00:00Z"));lesson.setEndsAt(java.time.Instant.parse("2026-09-10T15:00:00Z"));lesson.setDeliveryMode(dev.lourencogabriel.inatead.shared.model.DeliveryMode.ONSITE);lesson.setStatus(dev.lourencogabriel.inatead.shared.model.LessonStatus.IN_PROGRESS);em.persist(lesson);
+            List<String> ids=new ArrayList<>();
+            for(int i=0;i<125;i++) {
+                var learner=new dev.lourencogabriel.inatead.learner.model.Learner();learner.setPerson(person("Bulk candidate "+i,PersonTypeCode.LEARNER));em.persist(learner);
+                var participant=new dev.lourencogabriel.inatead.lesson.model.LessonParticipant();participant.setLesson(lesson);participant.setLearner(learner);
+                if(i==124)participant.setStatus(dev.lourencogabriel.inatead.shared.model.ParticipationStatus.CANCELLED);
+                em.persist(participant);ids.add(participant.getId());
+            }
+            em.flush();return new Scenario(auth,lesson.getId(),ids);
+        });
+        assertNotNull(scenario);
+        var original=new dev.lourencogabriel.inatead.lesson.dto.AttendanceRecordDtos.Request(scenario.participants().getFirst(),dev.lourencogabriel.inatead.shared.model.AttendanceStatus.EXCUSED,null,null,"Explicit draft");
+        var edit=new dev.lourencogabriel.inatead.lesson.service.PortalAttendanceService.Edit(original,null,null);
+        var saved=attendance.save(scenario.lessonId(),List.of(edit),scenario.auth());assertNull(saved.getFirst().error());
+        var retried=attendance.save(scenario.lessonId(),List.of(edit),scenario.auth());assertEquals(saved.getFirst().record().id(),retried.getFirst().record().id());
+        var originalRecord=saved.getFirst().record();
+        var updatedValues=new dev.lourencogabriel.inatead.lesson.dto.AttendanceRecordDtos.Request(originalRecord.lessonParticipantId(),originalRecord.status(),null,null,"Updated explicit draft");
+        var updated=attendance.save(scenario.lessonId(),List.of(new dev.lourencogabriel.inatead.lesson.service.PortalAttendanceService.Edit(updatedValues,originalRecord.id(),originalRecord.updatedAt())),scenario.auth()).getFirst();
+        assertNull(updated.error());assertEquals(attendanceRecords.findById(originalRecord.id()).updatedAt(),updated.record().updatedAt());
+        var nextValues=new dev.lourencogabriel.inatead.lesson.dto.AttendanceRecordDtos.Request(originalRecord.lessonParticipantId(),originalRecord.status(),null,null,"Second explicit update");
+        var next=attendance.save(scenario.lessonId(),List.of(new dev.lourencogabriel.inatead.lesson.service.PortalAttendanceService.Edit(nextValues,originalRecord.id(),updated.record().updatedAt())),scenario.auth()).getFirst();
+        assertNull(next.error());
+        assertNotNull(attendance.save(scenario.lessonId(),List.of(new dev.lourencogabriel.inatead.lesson.service.PortalAttendanceService.Edit(updatedValues,originalRecord.id(),originalRecord.updatedAt())),scenario.auth()).getFirst().error());
+        var filters=PortalReadService.attendanceFilters(scenario.lessonId(),Map.of("q","Bulk candidate"));
+        assertEquals(123,reads.count("lesson-attendance",filters,scenario.auth()));
+        var preview=reads.page("lesson-attendance",Map.of("lessonId",scenario.lessonId(),"previewFill","{\"q\":\"Bulk candidate 1\"}"),scenario.auth());
+        assertEquals(125,preview.totalElements());
+        assertTrue(preview.content().stream().anyMatch(row->Boolean.TRUE.equals(row.get("matchesPendingFill"))));
+        assertTrue(preview.content().stream().anyMatch(row->Boolean.FALSE.equals(row.get("matchesPendingFill"))));
+        var first=attendance.fill(scenario.lessonId(),Map.of("q","Bulk candidate"),scenario.auth());assertEquals(100L,first.get("saved"));assertEquals(23L,first.get("remaining"));
+        var second=attendance.fill(scenario.lessonId(),Map.of("q","Bulk candidate"),scenario.auth());assertEquals(23L,second.get("saved"));assertEquals(0L,second.get("remaining"));
+        assertEquals(0L,attendance.fill(scenario.lessonId(),Map.of("q","Bulk candidate"),scenario.auth()).get("saved"));
+        assertEquals(1,reads.page("lesson-attendance",Map.of("lessonId",scenario.lessonId(),"attendanceStatus","EXCUSED"),scenario.auth()).totalElements());
+        assertEquals(1,reads.page("lesson-attendance",Map.of("lessonId",scenario.lessonId(),"status","CANCELLED","attendanceStatus","MISSING"),scenario.auth()).totalElements());
+        assertEquals(7,reads.page("lesson-attendance",Map.of("lessonId",scenario.lessonId(),"size","20"),scenario.auth()).totalPages());
     }
 
     @Test void fillPreviewAndContextFiltersDoNotChangeTheCurrentPageOrItsTotal() {

@@ -103,6 +103,13 @@ public class LessonParticipantController {
         );
     }
 
+    @PostMapping(value="/lesson/{lessonId}/generate-roster",params="view=summary")
+    @PreAuthorize("@domainAuthorization.canManageLesson(authentication, #lessonId)")
+    public ApiResponse<java.util.Map<String,Object>> generateRosterSummary(@PathVariable String lessonId) {
+        var result=service.generateRegularRoster(lessonId,false);
+        return new ApiResponse<>(java.util.Map.of("lessonId",result.lessonId(),"createdCount",result.createdCount(),"existingCount",result.existingCount()),"Regular lesson roster generated");
+    }
+
     @PostMapping("/reassign")
     @PreAuthorize("@domainAuthorization.hasAnyRole(authentication, 'ADMIN')")
     public ApiResponse<LessonParticipantDtos.ReassignmentResponse> reassign(

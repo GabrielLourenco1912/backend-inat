@@ -110,6 +110,11 @@ public class LessonParticipantService {
 
     @Transactional
     public LessonParticipantDtos.RosterGenerationResponse generateRegularRoster(String lessonId) {
+        return generateRegularRoster(lessonId,true);
+    }
+
+    @Transactional
+    public LessonParticipantDtos.RosterGenerationResponse generateRegularRoster(String lessonId,boolean includeParticipants) {
         Lesson lesson = EntityLookup.require(lessonRepository, lessonId, "Lesson");
         ensureLessonAcceptsAssignments(lesson);
 
@@ -143,9 +148,9 @@ public class LessonParticipantService {
 
         participantRepository.saveAll(created);
         List<LessonParticipantDtos.Response> roster =
-                participantRepository.findAllByLesson_Id(lessonId).stream()
+                includeParticipants ? participantRepository.findAllByLesson_Id(lessonId).stream()
                         .map(this::toResponse)
-                        .toList();
+                        .toList() : List.of();
 
         return new LessonParticipantDtos.RosterGenerationResponse(
                 lessonId,

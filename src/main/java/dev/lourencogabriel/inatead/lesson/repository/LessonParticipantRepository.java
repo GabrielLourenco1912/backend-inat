@@ -58,6 +58,10 @@ public interface LessonParticipantRepository extends JpaRepository<LessonPartici
     Optional<LessonParticipant> findByLesson_IdAndLearner_Id(String lessonId, String learnerId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select participant from LessonParticipant participant join fetch participant.lesson where participant.id = :id")
+    Optional<LessonParticipant> findByIdForUpdate(@Param("id") String id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             select participant
             from LessonParticipant participant
