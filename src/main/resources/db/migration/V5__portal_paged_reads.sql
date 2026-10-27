@@ -1,0 +1,10 @@
+create index idx_lessons_start_id on lessons (starts_at, id);
+create index idx_activities_lesson_available_id on activities (lesson_id, available_at, id);
+create index idx_submissions_activity_state_time on activity_submissions (activity_id, status, created_at, id);
+create index idx_enrollments_cohort_period_id on cohort_enrollments (cohort_id, start_date, id);
+create index idx_enrollments_contract_period_id on cohort_enrollments (contract_id, start_date, id);
+create index idx_memberships_organization_period on organization_memberships (organization_id, start_date, id);
+create index idx_person_documents_owner_state_time on person_documents (person_id, verification_status, created_at, id);
+create index idx_contract_documents_owner_current_time on contract_documents (contract_id, is_current, created_at, id);
+create index idx_recipients_owner_channel_read_time on notification_recipients (recipient_user_id, channel, read_at, created_at, id);
+create index idx_recipients_notification_state_channel on notification_recipients (notification_id, delivery_status, channel);

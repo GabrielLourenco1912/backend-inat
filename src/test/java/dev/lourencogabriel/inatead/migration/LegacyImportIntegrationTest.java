@@ -17,7 +17,7 @@ class LegacyImportIntegrationTest {
         flyway.migrate();
         var jdbc = new JdbcTemplate(dataSource);
 
-        assertEquals("4", flyway.info().current().getVersion().toString());
+        assertEquals("5", flyway.info().current().getVersion().toString());
         assertEquals(142, count(jdbc, "select count(*) from organizations"));
         assertEquals(48, count(jdbc, """
                 select count(*) from organization_type_assignments
