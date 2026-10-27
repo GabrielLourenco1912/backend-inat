@@ -106,8 +106,8 @@ public class DomainAuthorization {
         if (assignedInstructor) {
             return true;
         }
-        return contractRepository.findAllByLearner_IdOrderByStartDateDesc(learnerId).stream()
-                .anyMatch(contract -> isManagerOf(user, contract.getEmployer()));
+        return roleCodes(user).contains("EMPLOYER_MANAGER")
+                && contractRepository.countAccessibleByLearnerAndManager(learnerId,user.getPerson().getId(),LocalDate.now(BusinessTime.ZONE))>0;
     }
 
     @Transactional(readOnly = true)

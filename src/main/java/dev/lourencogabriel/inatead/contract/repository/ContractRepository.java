@@ -18,6 +18,18 @@ import java.util.Optional;
 
 public interface ContractRepository extends JpaRepository<Contract, String> {
 
+    @Query(value="""
+            select count(*) from contracts c
+            where c.learner_id=:learnerId
+              and exists(select 1 from organization_memberships m
+                where m.organization_id=c.employer_id and m.person_id=:personId
+                  and m.status='ACTIVE' and m.start_date<=:today
+                  and (m.end_date is null or m.end_date>=:today))
+              and exists(select 1 from organization_type_assignments ot
+                where ot.organization_id=c.employer_id and ot.organization_type_code='EMPLOYER')
+            """,nativeQuery=true)
+    long countAccessibleByLearnerAndManager(@Param("learnerId") String learnerId,@Param("personId") String personId,@Param("today") LocalDate today);
+
     @Override
     @EntityGraph(attributePaths = {"learner.person", "employer", "school"})
     Page<Contract> findAll(Pageable pageable);
