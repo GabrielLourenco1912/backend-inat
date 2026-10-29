@@ -53,7 +53,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@SpringBootTest
+// Committed transactions exercise filesystem callbacks, so fixtures need a dedicated database.
+@SpringBootTest(properties =
+        "spring.datasource.url=jdbc:h2:mem:stored_file_lifecycle_test;MODE=MySQL;DB_CLOSE_DELAY=-1")
 @ActiveProfiles("test")
 class StoredFileLifecycleIntegrationTest {
 
