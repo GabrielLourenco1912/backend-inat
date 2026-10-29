@@ -105,6 +105,7 @@ public class AccountSecurityService {
 
     public void recordSuccessfulAuthentication(User user) {
         user.setFailedAuthenticationAttempts(0);
+        user.setLastLoginAt(clock.instant());
     }
 
     public void applyAdministrativeUpdate(
